@@ -9,7 +9,7 @@ provider "aws" {
 module "app" {
   # In your repository:
   #   source  = "nnthanh101/serverless/aws//modules/serverless-web-app"
-  #   version = "0.1.0"
+  #   version = "0.2.0"
   # Here the path keeps the example testable before and after a release:
   source = "../../modules/serverless-web-app"
 

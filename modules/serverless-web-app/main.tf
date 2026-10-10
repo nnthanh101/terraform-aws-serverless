@@ -24,7 +24,11 @@ locals {
   # Built from the name, never read: a data source would decrypt the value in every plan, which the plan roles deny.
   secret_parameter_arn = "arn:${data.aws_partition.files.partition}:ssm:${var.region}:${var.account_id}:parameter${local.secret_parameter_name}"
 
-  secret_environment = local.secrets_manager ? {
+  secret_in_environment = var.secret_store == "environment"
+
+  secret_environment = local.secret_in_environment ? {
+    SECRET_KEY = sensitive(random_password.secret_key[0].result)
+    } : local.secrets_manager ? {
     SECRET_KEY_SECRET = aws_secretsmanager_secret.secret_key[0].name
     } : {
     SECRET_KEY_PARAMETER = local.secret_parameter_name
@@ -38,15 +42,17 @@ locals {
     api_stage   = aws_apigatewayv2_stage.default.name
   }
 
-  # A prebuilt zip is used as it is; otherwise the source folder is zipped.
-  package_path = var.package_zip_path != null ? var.package_zip_path : data.archive_file.app[0].output_path
-  package_hash = var.package_zip_path != null ? filebase64sha256(var.package_zip_path) : data.archive_file.app[0].output_base64sha256
+  # With image_uri the function is a container image and nothing is zipped. Otherwise a prebuilt zip is
+  # used as it is, or the source folder is zipped.
+  image        = var.image_uri != null
+  package_path = local.image ? null : (var.package_zip_path != null ? var.package_zip_path : data.archive_file.app[0].output_path)
+  package_hash = local.image ? null : (var.package_zip_path != null ? filebase64sha256(var.package_zip_path) : data.archive_file.app[0].output_base64sha256)
 }
 
 # ------------------------------------------------------------------ function
 
 data "archive_file" "app" {
-  count            = var.package_zip_path == null ? 1 : 0
+  count            = (var.package_zip_path == null && var.image_uri == null) ? 1 : 0
   type             = "zip"
   source_dir       = var.source_dir
   output_path      = "${coalesce(var.build_dir, "${path.root}/.build")}/${local.name_prefix}-api.zip"
@@ -92,12 +98,14 @@ resource "aws_lambda_function" "app" {
   # checkov:skip=CKV_AWS_50:0001 traces come from ADOT with Application Signals when the service adds them (lambda.md)
   # checkov:skip=CKV_AWS_116:0001 callers are synchronous and receive the error; a dead-letter queue applies only to asynchronous calls
   # checkov:skip=CKV_AWS_117:0001 the function calls only public AWS endpoints, so a VPC would add NAT cost and nothing to reach
-  # checkov:skip=CKV_AWS_173:0001 the environment holds names only; secrets are read at run time, never stored here
+  # checkov:skip=CKV_AWS_173:0001 the environment holds names only; secrets are read at run time, never stored here, except secret_store = "environment", which the owner chooses and whose trade-off the variable states
   # checkov:skip=CKV_AWS_272:0001 only CI deploys code, from the reviewed and merged commit
   function_name    = "${local.name_prefix}-api"
   role             = aws_iam_role.app.arn
-  runtime          = var.runtime
-  handler          = var.handler
+  package_type     = local.image ? "Image" : "Zip"
+  image_uri        = var.image_uri
+  runtime          = local.image ? null : var.runtime
+  handler          = local.image ? null : var.handler
   architectures    = [var.architecture]
   memory_size      = var.memory_mb
   timeout          = var.timeout_seconds
@@ -244,9 +252,18 @@ resource "aws_secretsmanager_secret_version" "secret_key" {
   secret_string_wo_version = 1
 }
 
+# With secret_store = "environment" the key is generated here and set as SECRET_KEY in the function's
+# environment (encrypted at rest by Lambda); it is in state and readable with lambda:GetFunctionConfiguration.
+resource "random_password" "secret_key" {
+  count   = local.secret_in_environment ? 1 : 0
+  length  = 48
+  special = false
+}
+
 resource "aws_iam_role_policy" "secret_key" {
-  name = "secret-key"
-  role = aws_iam_role.app.id
+  count = local.secret_in_environment ? 0 : 1
+  name  = "secret-key"
+  role  = aws_iam_role.app.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [local.secrets_manager ? {
@@ -259,4 +276,10 @@ resource "aws_iam_role_policy" "secret_key" {
       Resource = local.secret_parameter_arn
     }]
   })
+}
+
+# The policy gained a count (none with secret_store = "environment"); an existing caller keeps its policy.
+moved {
+  from = aws_iam_role_policy.secret_key
+  to   = aws_iam_role_policy.secret_key[0]
 }

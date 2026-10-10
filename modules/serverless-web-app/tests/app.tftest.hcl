@@ -141,10 +141,10 @@ run "signing_key_and_single_writer" {
 
   assert {
     condition = (
-      length(jsondecode(aws_iam_role_policy.secret_key.policy).Statement) == 1 &&
-      jsondecode(aws_iam_role_policy.secret_key.policy).Statement[0].Effect == "Allow" &&
-      jsondecode(aws_iam_role_policy.secret_key.policy).Statement[0].Action == "secretsmanager:GetSecretValue" &&
-      jsondecode(aws_iam_role_policy.secret_key.policy).Statement[0].Resource == "arn:aws:secretsmanager:aa-example-1:111122223333:secret:orders-dev-secret-key-AbCdEf"
+      length(jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement) == 1 &&
+      jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement[0].Effect == "Allow" &&
+      jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement[0].Action == "secretsmanager:GetSecretValue" &&
+      jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement[0].Resource == "arn:aws:secretsmanager:aa-example-1:111122223333:secret:orders-dev-secret-key-AbCdEf"
     )
     error_message = "the secret-key grant is exactly one statement: secretsmanager:GetSecretValue on this one secret's ARN, no wildcard"
   }
@@ -186,10 +186,10 @@ run "parameter_store_key" {
 
   assert {
     condition = (
-      length(jsondecode(aws_iam_role_policy.secret_key.policy).Statement) == 1 &&
-      jsondecode(aws_iam_role_policy.secret_key.policy).Statement[0].Effect == "Allow" &&
-      jsondecode(aws_iam_role_policy.secret_key.policy).Statement[0].Action == "ssm:GetParameter" &&
-      jsondecode(aws_iam_role_policy.secret_key.policy).Statement[0].Resource == "arn:aws:ssm:aa-example-1:111122223333:parameter/orders/dev/secret-key"
+      length(jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement) == 1 &&
+      jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement[0].Effect == "Allow" &&
+      jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement[0].Action == "ssm:GetParameter" &&
+      jsondecode(aws_iam_role_policy.secret_key[0].policy).Statement[0].Resource == "arn:aws:ssm:aa-example-1:111122223333:parameter/orders/dev/secret-key"
     )
     error_message = "the key grant is exactly one statement: ssm:GetParameter on the one parameter's ARN built from its name, no wildcard and no kms action"
   }

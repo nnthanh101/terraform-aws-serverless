@@ -246,3 +246,103 @@ run "build_dir_sets_where_the_zip_is_written" {
     error_message = "the zip is written under the caller's build_dir"
   }
 }
+
+run "image_mode_runs_a_pinned_container_image" {
+  command = plan
+
+  variables {
+    source_dir = null
+    image_uri  = "111122223333.dkr.ecr.aa-example-1.amazonaws.com/orders@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.package_type == "Image" && aws_lambda_function.app.image_uri == var.image_uri
+    error_message = "image_uri must make the function a container image at that uri."
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.handler == null && aws_lambda_function.app.runtime == null && aws_lambda_function.app.filename == null
+    error_message = "An image function has no handler, runtime or filename."
+  }
+
+  assert {
+    condition     = length(data.archive_file.app) == 0
+    error_message = "Image mode must not build an archive."
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.architectures == tolist(["arm64"])
+    error_message = "Image mode keeps the architecture."
+  }
+}
+
+run "image_tag_only_is_rejected" {
+  command = plan
+
+  variables {
+    source_dir = null
+    image_uri  = "111122223333.dkr.ecr.aa-example-1.amazonaws.com/orders:latest"
+  }
+
+  expect_failures = [var.image_uri]
+}
+
+run "environment_secret_sets_secret_key_without_a_store" {
+  command = plan
+
+  variables {
+    secret_store = "environment"
+  }
+
+  assert {
+    condition     = length(aws_secretsmanager_secret.secret_key) == 0 && length(aws_secretsmanager_secret_version.secret_key) == 0
+    error_message = "environment mode must create no Secrets Manager secret."
+  }
+
+  assert {
+    condition     = length(random_password.secret_key) == 1 && length(aws_iam_role_policy.secret_key) == 0
+    error_message = "environment mode generates the key and adds no secret-read policy."
+  }
+
+  assert {
+    condition     = contains(keys(nonsensitive(aws_lambda_function.app.environment[0].variables)), "SECRET_KEY") && !contains(keys(nonsensitive(aws_lambda_function.app.environment[0].variables)), "SECRET_KEY_SECRET") && !contains(keys(nonsensitive(aws_lambda_function.app.environment[0].variables)), "SECRET_KEY_PARAMETER")
+    error_message = "SECRET_KEY, and neither store variable, must be in the environment."
+  }
+}
+
+run "no_reservation_with_null_concurrency" {
+  command = plan
+
+  variables {
+    reserved_concurrency = null
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.reserved_concurrent_executions == null
+    error_message = "A null reserved_concurrency must reserve nothing."
+  }
+}
+
+run "reserved_concurrency_out_of_range_is_rejected" {
+  command = plan
+
+  variables {
+    reserved_concurrency = 101
+  }
+
+  expect_failures = [var.reserved_concurrency]
+}
+
+run "default_caller_is_unchanged" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.app.package_type == "Zip" && aws_lambda_function.app.handler == "handler.handler" && aws_lambda_function.app.runtime == "python3.13" && length(data.archive_file.app) == 1
+    error_message = "Without image_uri the function is the zip function."
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.reserved_concurrent_executions == 4 && length(aws_secretsmanager_secret.secret_key) == 1 && length(random_password.secret_key) == 0 && length(aws_iam_role_policy.secret_key) == 1
+    error_message = "The defaults keep concurrency 4, the Secrets Manager secret and its read policy."
+  }
+}

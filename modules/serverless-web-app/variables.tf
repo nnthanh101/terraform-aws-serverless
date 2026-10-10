@@ -178,31 +178,42 @@ variable "jwt_audience" {
 
 variable "secret_store" {
   type        = string
-  description = "Where the token signing key lives. secrets-manager (the default) creates and writes the secret in this module. parameter-store reads the SecureString that the owner applies in a separate root: this module creates no secret and only grants read on its name."
+  description = "Where the token signing key lives. secrets-manager (the default) creates and writes the secret in this module. parameter-store reads the SecureString that the owner applies in a separate root: this module creates no secret and only grants read on its name. environment generates the key here and sets it as the SECRET_KEY environment variable of the function, with no secret store and no read permission; the trade-off is that the value is in state and visible to anyone allowed lambda:GetFunctionConfiguration."
   default     = "secrets-manager"
   nullable    = false
 
   validation {
-    condition     = contains(["secrets-manager", "parameter-store"], var.secret_store)
-    error_message = "secret_store must be secrets-manager or parameter-store."
+    condition     = contains(["secrets-manager", "parameter-store", "environment"], var.secret_store)
+    error_message = "secret_store must be secrets-manager, parameter-store or environment."
   }
 }
 
 variable "source_dir" {
   type        = string
-  description = "Folder with the built handler, zipped by this module. The calling root passes a path that resolves from where terraform runs. Set this or package_zip_path, not both."
+  description = "Folder with the built handler, zipped by this module. The calling root passes a path that resolves from where terraform runs. Set this or package_zip_path, not both. Not used when image_uri is set."
   default     = null
 
   validation {
-    condition     = (var.source_dir != null) != (var.package_zip_path != null)
-    error_message = "Set exactly one of source_dir (a folder to zip) and package_zip_path (a zip already built)."
+    condition     = var.image_uri != null || (var.source_dir != null) != (var.package_zip_path != null)
+    error_message = "Set exactly one of source_dir (a folder to zip) and package_zip_path (a zip already built), or set image_uri."
   }
 }
 
 variable "package_zip_path" {
   type        = string
-  description = "A zip that is already built; it is deployed as it is and nothing is archived. Set this or source_dir, not both."
+  description = "A zip that is already built; it is deployed as it is and nothing is archived. Set this or source_dir, not both. Not used when image_uri is set."
   default     = null
+}
+
+variable "image_uri" {
+  type        = string
+  description = "ECR image that the function runs as a container image, pinned by digest (<account>.dkr.ecr.<region>.amazonaws.com/<name>@sha256:<64 hex>) so a tag can never move it. Null (the default) deploys the zip from source_dir or package_zip_path; when set, neither is needed and runtime and handler are not used."
+  default     = null
+
+  validation {
+    condition     = var.image_uri == null || can(regex("^[0-9]{12}\\.dkr\\.ecr(-fips)?\\.[a-z0-9-]+\\.amazonaws\\.com(\\.cn)?/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$", coalesce(var.image_uri, "-")))
+    error_message = "image_uri must be an ECR image pinned by digest: <account>.dkr.ecr.<region>.amazonaws.com/<name>@sha256:<64 hex digits>. A tag is refused."
+  }
 }
 
 variable "build_dir" {
@@ -213,12 +224,12 @@ variable "build_dir" {
 
 variable "reserved_concurrency" {
   type        = number
-  description = "Concurrent executions reserved for the function. Small, so one function cannot take the account's pool; a stale write is refused by the app's conditional put, not by this number."
+  description = "Concurrent executions reserved for the function. Small, so one function cannot take the account's pool; a stale write is refused by the app's conditional put, not by this number. Null reserves nothing, for an account whose concurrency limit leaves no room to reserve."
   default     = 4
 
   validation {
-    condition     = var.reserved_concurrency >= 1 && var.reserved_concurrency <= 100
-    error_message = "reserved_concurrency must be between 1 and 100."
+    condition     = var.reserved_concurrency == null ? true : (var.reserved_concurrency >= 1 && var.reserved_concurrency <= 100)
+    error_message = "reserved_concurrency must be null or between 1 and 100."
   }
 }
 
