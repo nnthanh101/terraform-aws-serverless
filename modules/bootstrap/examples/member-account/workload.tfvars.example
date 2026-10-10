@@ -1,0 +1,21 @@
+# The Workload account: dev and production in one account. Copy to workload.tfvars (never committed) and replace
+# every <placeholder>. Further environments are added with their own record, as a gate change.
+account_id              = "<Workload account id>"
+region                  = "<AWS_SSO_REGION>"
+github_repositories     = ["<organisation>/<repository>"]
+github_repository_ids   = ["<repository id>"]
+github_subject_prefixes = ["<sub_claim_prefix>"]
+github_owner_id         = "<owner id>"
+default_branch          = "<default branch>"
+budget_limit_usd        = 0 # the budget owner's figure; 0 is refused, so an unedited copy never applies
+notification_email      = "<LZ_BUDGET_ALERT_EMAIL>"
+change_id               = "<change record>"
+
+account_mode            = "single"
+environments            = ["dev", "production"]
+production_environments = ["production"]
+
+# Production applies only from the release workflow on the default branch.
+apply_workflow_refs = {
+  production = ["<organisation>/<repository>/.github/workflows/<release workflow>@refs/heads/<default branch>"]
+}

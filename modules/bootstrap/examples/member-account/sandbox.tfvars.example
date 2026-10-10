@@ -1,0 +1,16 @@
+# The Sandbox account: one environment, no production role. Copy to sandbox.tfvars (never committed) and replace
+# every <placeholder>. Its own environment name keeps the pipeline's accounts line at one entry per account.
+account_id              = "<Sandbox account id>"
+region                  = "<AWS_SSO_REGION>"
+github_repositories     = ["<organisation>/<repository>"]
+github_repository_ids   = ["<repository id>"]
+github_subject_prefixes = ["<sub_claim_prefix>"]
+github_owner_id         = "<owner id>"
+default_branch          = "<default branch>"
+budget_limit_usd        = 0 # the budget owner's figure, alerted at 80% and 100%; 0 is refused, so an unedited copy never applies
+notification_email      = "<LZ_BUDGET_ALERT_EMAIL>"
+change_id               = "<change record>"
+
+account_mode            = "landing-zone"
+environments            = ["sandbox"]
+production_environments = []

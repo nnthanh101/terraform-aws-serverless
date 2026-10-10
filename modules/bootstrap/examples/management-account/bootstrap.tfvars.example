@@ -1,0 +1,9 @@
+# Copy to bootstrap.tfvars (never committed) and replace every <placeholder>.
+account_id         = "<management account id: AWS_ROOT_ACCOUNT_ID>"
+region             = "<AWS_SSO_REGION>"
+github_repository  = "<organisation>/<repository>"
+default_branch     = "<default branch>"
+state_bucket_name  = "platform-shared-tfstate-<account id>"
+budget_limit_usd   = 50 # the budget owner's figure
+notification_email = "<LZ_BUDGET_ALERT_EMAIL>"
+change_id          = "0021"

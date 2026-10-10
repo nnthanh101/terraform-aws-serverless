@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and replace every <placeholder>; the plan fails while any is left.
+# terraform.tfvars is git-ignored; never commit real account IDs. There is no default Region.
+account_id          = "<12-digit account id>"
+region              = "<your-aws-region>"
+github_repositories = ["<organisation>/<repository>"]
+default_branch      = "<default branch from the repository settings>"
+budget_limit_usd    = 100 # US dollars a month, set by the budget owner
+notification_email  = "<budget owner email>"
+change_id           = null # four digits when a change record governs this apply
+
+# Organisation tags for every resource. The module adds environment, service, managed-by and change.
+tags = {
+  owner = "<team that owns this account>"
+}

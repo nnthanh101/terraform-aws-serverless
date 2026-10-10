@@ -1,0 +1,24 @@
+# Tags the public version recorded in .public-build once its pull request is merged. The Terraform Registry reads the tag.
+name: tag
+on:
+  push:
+    branches:
+      - main
+permissions: {}
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tag the version
+        run: |
+          set -euo pipefail
+          v=$(sed -n 's/^public_version=//p' .public-build)
+          printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "tag: .public-build holds no version"; exit 1; }
+          grep -q '^library_tag=dev:' .public-build && { echo "tag: a development build is never tagged"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$v" > /dev/null 2>&1; then echo "tag: v$v exists"; exit 0; fi
+          git tag "v$v"
+          git push origin "v$v"
+          echo "tag: v$v pushed"

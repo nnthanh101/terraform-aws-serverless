@@ -1,0 +1,21 @@
+# A card-data workload in its own account under Workloads: production only, so no other environment shares its
+# roles, state or plans, and only the payment service's release workflow applies; pipelines hold no stored
+# credential. Copy to card-data.tfvars (never committed) and replace every <placeholder>.
+account_id              = "<card-data account id>"
+region                  = "<AWS_SSO_REGION>"
+github_repositories     = ["<organisation>/<payment repository>"]
+github_repository_ids   = ["<repository id>"]
+github_subject_prefixes = ["<sub_claim_prefix>"]
+github_owner_id         = "<owner id>"
+default_branch          = "<default branch>"
+budget_limit_usd        = 0 # the budget owner's figure; 0 is refused, so an unedited copy never applies
+notification_email      = "<LZ_BUDGET_ALERT_EMAIL>"
+change_id               = "<change record>"
+
+account_mode            = "landing-zone"
+environments            = ["production"]
+production_environments = ["production"]
+
+apply_workflow_refs = {
+  production = ["<organisation>/<payment repository>/.github/workflows/<release workflow>@refs/heads/<default branch>"]
+}

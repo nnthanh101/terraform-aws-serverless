@@ -1,0 +1,16 @@
+# Copy to backend.tf after the first apply, then move the local state into the bucket:
+#   terraform init -migrate-state
+# Fill every value from the backend_settings output; backend blocks cannot use variables.
+# The bucket refuses uploads encrypted with any other key, so kms_key_id is the key ARN, not an alias.
+# Apply roles cannot write objects under bootstrap/, so this state changes only through the
+# account administrator.
+terraform {
+  backend "s3" {
+    bucket       = "<backend_settings.bucket>"
+    key          = "bootstrap/shared/terraform.tfstate"
+    region       = "<backend_settings.region>"
+    kms_key_id   = "<backend_settings.kms_key_id>"
+    encrypt      = true
+    use_lockfile = true
+  }
+}

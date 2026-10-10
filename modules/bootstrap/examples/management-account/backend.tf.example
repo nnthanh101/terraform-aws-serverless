@@ -1,0 +1,8 @@
+# Copy to backend.tf after the first apply, fill backend.hcl from the backend_settings output, then move
+# the local state into the bucket: sh plugins/terraform-aws/scripts/backend-migrate.sh migrate infra/bootstrap
+terraform {
+  backend "s3" {
+    use_lockfile = true
+    encrypt      = true
+  }
+}

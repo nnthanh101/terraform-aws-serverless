@@ -1,0 +1,55 @@
+terraform-aws-serverless
+Copyright 2026 Nhat-Thanh Nguyen (nnthanh101@gmail.com)
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Provenance: public version 0.1.0 is generated from library release dev:88b31aa41391535c193e980f1336622d9d0a7935 (commit 88b31aa) by scripts/public-modules.sh.
+This repository is generated; changes are made in the library and arrive with its next release.
+
+== modules/bootstrap notices ==
+Terraform AWS Bootstrap Module
+Copyright 2026 Nhat-Thanh Nguyen (nnthanh101@gmail.com)
+
+This module is derived from the bootstrap template of the terraform-aws plugin
+(repository the terraform-aws plugin repository, path plugins/terraform-aws/templates/bootstrap,
+commit efe91f7, 2026-09-24), with its later ci_roles switch (develop 90d9854, the landing-zone
+organization change) ported on the same day.
+Original work Copyright 2026 nnthanh101, licensed under Apache License 2.0
+(SPDX: Apache-2.0; LICENSE and NOTICE of that repository checked 2026-09-24, ADR-029).
+
+It also ports features of two earlier modules by the same author:
+modules/genesis (default bucket name, lifecycle day inputs) and
+modules/github-oidc (create_oidc_provider, no thumbprint argument for GitHub's issuer, repository list,
+max_session_duration range).
+
+Modifications by Nhat-Thanh Nguyen:
+
+- Callable module: the provider block moved to examples/single-account; the account
+  and Region are checked by postconditions on aws_caller_identity and aws_region
+- Provider constraints >= 6.28, < 7.0 and required_version >= 1.11, < 2.0 (ADR-003);
+  provider_meta user_agent registry.terraform.io/nnthanh101/serverless/aws
+- name_prefix for every delivery role and per-tenant name; the default keeps the
+  template's names
+- create_oidc_provider and oidc_provider_arn; every ARN built from aws_partition
+- github_repositories list; optional repository_id, repository_owner_id and
+  job_workflow_ref claims
+- apply_policy_arns, max_session_duration, tags, noncurrent_version_expiration_days
+  and plans_expiration_days inputs; change_id optional
+- Forecast budget notification at 100%
+- Outputs state_bucket_arn and state_bucket_region
+- Copyright headers, examples/single-account and Tier 1 tests for each new input
+The alternate contacts and the budget that leaves credits out were ported from the
+same template on 2026-09-26 (the terraform-aws plugin repository develop 4b17276, change 0032 for the budget).
+
+== modules/github-oidc notices ==
+GitHub Actions OIDC Terraform Module
+Copyright 2026 Nhat-Thanh Nguyen (nnthanh101@gmail.com)
+
+This module is an original work by Nhat-Thanh Nguyen.
+
+It implements GitHub Actions OIDC federation for AWS IAM using the
+token.actions.githubusercontent.com provider with split-trust IAM roles
+(plan/readonly role trusted from any ref; apply role trusted from
+main branch only).
+
+This product includes no derived upstream code.
