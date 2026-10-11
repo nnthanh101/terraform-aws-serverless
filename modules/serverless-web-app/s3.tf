@@ -10,7 +10,7 @@ data "aws_partition" "files" {}
 resource "aws_kms_key" "files" {
   count = var.files_kms_key ? 1 : 0
 
-  description             = "${local.name_prefix}-files: application files bucket"
+  description             = "${local.name_prefix}-${var.files_bucket_label}: application files bucket"
   enable_key_rotation     = true
   deletion_window_in_days = 30
 
@@ -35,7 +35,7 @@ resource "aws_kms_key" "files" {
 resource "aws_kms_alias" "files" {
   count = var.files_kms_key ? 1 : 0
 
-  name          = "alias/${local.name_prefix}-files"
+  name          = "alias/${local.name_prefix}-${var.files_bucket_label}"
   target_key_id = aws_kms_key.files[0].key_id
 }
 
@@ -54,7 +54,7 @@ resource "aws_s3_bucket" "files" {
   # checkov:skip=CKV2_AWS_62:0001 the function reads and writes these files directly; nothing consumes object events
   # checkov:skip=CKV_AWS_18:0001 server access logs need a separate log bucket; CloudTrail data events are the audit trail when the spec asks for one
   # checkov:skip=CKV_AWS_144:0001 one Region; replication doubles storage cost and the spec has not asked for it
-  bucket = "${local.name_prefix}-files-${var.account_id}"
+  bucket = "${local.name_prefix}-${var.files_bucket_label}-${var.account_id}"
 
   # The students' files live here. A plan that destroys or replaces the bucket is refused whatever the caller sets.
   # A literal on purpose: lifecycle arguments cannot be variables (change 0052).

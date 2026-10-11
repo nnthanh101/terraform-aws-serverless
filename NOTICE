@@ -3,7 +3,7 @@ Copyright 2026 Nhat-Thanh Nguyen (nnthanh101@gmail.com)
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-Provenance: public version 0.3.0 is generated from library release dev:06381b8539fdb61ef2dee860a363424a46540427 (commit 06381b8) by scripts/public-modules.sh.
+Provenance: public version 0.4.0 is generated from library release dev:9213b411ef1bf2d058004e97f18631ebbe4ab9d3 (commit 9213b41) by scripts/public-modules.sh.
 This repository is generated; changes are made in the library and arrive with its next release.
 
 == modules/bootstrap notices ==

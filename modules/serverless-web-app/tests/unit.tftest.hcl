@@ -426,3 +426,45 @@ run "image_environment_secret_and_no_files_key_plan_together" {
     error_message = "An image function with the environment secret and no files key must plan."
   }
 }
+
+run "files_bucket_label_default_keeps_the_files_name" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.files.bucket == "orders-dev-files-111122223333"
+    error_message = "The default label must keep the bucket name <prefix>-files-<account>."
+  }
+
+  assert {
+    condition     = aws_kms_alias.files[0].name == "alias/orders-dev-files" && startswith(aws_kms_key.files[0].description, "orders-dev-files:")
+    error_message = "The default label must keep the key alias and description."
+  }
+}
+
+run "files_bucket_label_data_renames_bucket_alias_and_description" {
+  command = plan
+
+  variables {
+    files_bucket_label = "data"
+  }
+
+  assert {
+    condition     = aws_s3_bucket.files.bucket == "orders-dev-data-111122223333"
+    error_message = "Label data must give <prefix>-data-<account>."
+  }
+
+  assert {
+    condition     = aws_kms_alias.files[0].name == "alias/orders-dev-data" && startswith(aws_kms_key.files[0].description, "orders-dev-data:")
+    error_message = "Label data must rename the key alias and description."
+  }
+}
+
+run "files_bucket_label_invalid_is_rejected" {
+  command = plan
+
+  variables {
+    files_bucket_label = "Data_1"
+  }
+
+  expect_failures = [var.files_bucket_label]
+}

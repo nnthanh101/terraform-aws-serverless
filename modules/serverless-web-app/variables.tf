@@ -303,3 +303,15 @@ variable "files_kms_key" {
   default     = true
   nullable    = false
 }
+
+variable "files_bucket_label" {
+  type        = string
+  description = "The word in the data bucket's name: <prefix>-<label>-<account>; changing it on a live stack replaces the bucket, which its lifecycle refuses: move the data first."
+  default     = "files"
+  nullable    = false
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,18}[a-z0-9])?$", var.files_bucket_label))
+    error_message = "files_bucket_label must be 1 to 20 characters: lowercase letters, digits and hyphens, not starting or ending with a hyphen."
+  }
+}
