@@ -15,7 +15,7 @@ Terraform modules for a serverless web application on AWS, published to the Terr
 ```hcl
 module "app" {
   source  = "nnthanh101/serverless/aws//modules/serverless-web-app"
-  version = "0.2.0"
+  version = "0.3.0"
   # inputs: see modules/serverless-web-app/README.md
 }
 ```
@@ -25,5 +25,5 @@ Pin an exact version. Each version is tested with `terraform test` on a mocked p
 
 ## Where this comes from
 
-This repository is generated from release `dev:2caa3d0e7f1bebea69ede98453569662953dce2a` of the maintainer's private module library and is not edited by hand: a
+This repository is generated from release `dev:06381b8539fdb61ef2dee860a363424a46540427` of the maintainer's private module library and is not edited by hand: a
 change is made there and arrives with its next release (see `NOTICE` and `CHANGELOG.md`). Licensed under Apache-2.0.

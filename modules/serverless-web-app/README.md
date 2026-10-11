@@ -119,6 +119,7 @@ The calling root's owner, from their own terminal or the delivery pipeline's app
 | <a name="input_architecture_exception"></a> [architecture\_exception](#input\_architecture\_exception) | Why this function runs on x86\_64 instead of arm64: the reason, or the spec's exception id. Null for arm64. | `string` | `null` | no |
 | <a name="input_build_dir"></a> [build\_dir](#input\_build\_dir) | Folder where the zip of source\_dir is written. Null writes <root module folder>/.build. Ignored with package\_zip\_path. The calling root passes a path that resolves from where terraform runs. | `string` | `null` | no |
 | <a name="input_environment_variables"></a> [environment\_variables](#input\_environment\_variables) | The app's own environment variables. SERVICE, ENVIRONMENT, S3DB\_BUCKET, CORS\_ORIGIN and the signing key's name are set by this module and win over a key of the same name. | `map(string)` | `{}` | no |
+| <a name="input_files_kms_key"></a> [files\_kms\_key](#input\_files\_kms\_key) | false uses S3-managed encryption at no cost; true adds a customer-managed key, about 1 USD a month, with key-level access control and audit. | `bool` | `true` | no |
 | <a name="input_handler"></a> [handler](#input\_handler) | Handler entry point, for example handler.handler for Python or index.handler for Node.js. | `string` | `"handler.handler"` | no |
 | <a name="input_image_uri"></a> [image\_uri](#input\_image\_uri) | ECR image that the function runs as a container image, pinned by digest (<account>.dkr.ecr.<region>.amazonaws.com/<name>@sha256:<64 hex>) so a tag can never move it. Null (the default) deploys the zip from source\_dir or package\_zip\_path; when set, neither is needed and runtime and handler are not used. | `string` | `null` | no |
 | <a name="input_jwt_audience"></a> [jwt\_audience](#input\_jwt\_audience) | Accepted JWT audiences (client IDs). Required when jwt\_issuer is set. | `list(string)` | `[]` | no |
@@ -147,7 +148,7 @@ The calling root's owner, from their own terminal or the delivery pipeline's app
 | <a name="output_alias_arn"></a> [alias\_arn](#output\_alias\_arn) | ARN of the 'live' alias that serves traffic. |
 | <a name="output_api_id"></a> [api\_id](#output\_api\_id) | HTTP API ID. |
 | <a name="output_files_bucket"></a> [files\_bucket](#output\_files\_bucket) | Bucket that holds the application's files (the students' data). It cannot be destroyed through this module. |
-| <a name="output_files_kms_key_arn"></a> [files\_kms\_key\_arn](#output\_files\_kms\_key\_arn) | Customer managed key that encrypts the files bucket. It cannot be destroyed through this module. |
+| <a name="output_files_kms_key_arn"></a> [files\_kms\_key\_arn](#output\_files\_kms\_key\_arn) | Customer managed key that encrypts the files bucket, or null when files\_kms\_key is false. It cannot be destroyed through this module. |
 | <a name="output_function_name"></a> [function\_name](#output\_function\_name) | Lambda function name. |
 | <a name="output_function_role_arn"></a> [function\_role\_arn](#output\_function\_role\_arn) | Execution role of the function. |
 | <a name="output_site_bucket"></a> [site\_bucket](#output\_site\_bucket) | Bucket that CI uploads the built site to. |

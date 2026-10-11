@@ -296,3 +296,10 @@ variable "alarm_latency_p95_ms" {
   description = "API p95 latency, in milliseconds, that raises the latency alarm."
   default     = 1000
 }
+
+variable "files_kms_key" {
+  type        = bool
+  description = "false uses S3-managed encryption at no cost; true adds a customer-managed key, about 1 USD a month, with key-level access control and audit."
+  default     = true
+  nullable    = false
+}

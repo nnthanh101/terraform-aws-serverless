@@ -21,7 +21,7 @@ override_resource {
 }
 
 override_resource {
-  target          = aws_kms_key.files
+  target          = aws_kms_key.files[0]
   override_during = plan
   values = {
     arn    = "arn:aws:kms:aa-example-1:111122223333:key/11111111-1111-1111-1111-111111111111"
@@ -84,7 +84,7 @@ run "customer_managed_key" {
   }
 
   assert {
-    condition     = aws_kms_key.files.enable_key_rotation && aws_kms_key.files.deletion_window_in_days == 30
+    condition     = aws_kms_key.files[0].enable_key_rotation && aws_kms_key.files[0].deletion_window_in_days == 30
     error_message = "The bucket key must rotate and keep a 30-day deletion window."
   }
 

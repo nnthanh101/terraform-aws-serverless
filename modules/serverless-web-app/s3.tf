@@ -2,11 +2,14 @@
 # Private S3 bucket for application files: owner-enforced objects, all public access blocked, TLS 1.2 or later
 # only, versioned, old versions removed after 30 days. Objects are encrypted with this bucket's own rotating
 # customer managed key, which only the function's role uses, and only through S3. The key adds a fixed monthly
-# fee; the S3 bucket key keeps KMS request charges low.
+# fee; the S3 bucket key keeps KMS request charges low. With files_kms_key = false there is no key and the bucket
+# uses S3-managed encryption (SSE-S3) at no cost.
 
 data "aws_partition" "files" {}
 
 resource "aws_kms_key" "files" {
+  count = var.files_kms_key ? 1 : 0
+
   description             = "${local.name_prefix}-files: application files bucket"
   enable_key_rotation     = true
   deletion_window_in_days = 30
@@ -30,8 +33,21 @@ resource "aws_kms_key" "files" {
 }
 
 resource "aws_kms_alias" "files" {
+  count = var.files_kms_key ? 1 : 0
+
   name          = "alias/${local.name_prefix}-files"
-  target_key_id = aws_kms_key.files.key_id
+  target_key_id = aws_kms_key.files[0].key_id
+}
+
+# The key and alias were single resources before files_kms_key existed; the callers' state moves to index 0.
+moved {
+  from = aws_kms_key.files
+  to   = aws_kms_key.files[0]
+}
+
+moved {
+  from = aws_kms_alias.files
+  to   = aws_kms_alias.files[0]
 }
 
 resource "aws_s3_bucket" "files" {
@@ -75,11 +91,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "files" {
   bucket = aws_s3_bucket.files.id
 
   rule {
-    bucket_key_enabled = true
+    bucket_key_enabled = var.files_kms_key
 
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.files.arn
+      sse_algorithm     = var.files_kms_key ? "aws:kms" : "AES256"
+      kms_master_key_id = one(aws_kms_key.files[*].arn)
     }
   }
 }
@@ -137,7 +153,7 @@ resource "aws_iam_role_policy" "files" {
   role = aws_iam_role.app.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Sid      = "ListFiles"
         Effect   = "Allow"
@@ -150,13 +166,12 @@ resource "aws_iam_role_policy" "files" {
         Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
         Resource = "${aws_s3_bucket.files.arn}/*"
       },
-      {
+      ], [for arn in aws_kms_key.files[*].arn : {
         Sid       = "FilesKeyThroughS3"
         Effect    = "Allow"
         Action    = ["kms:Decrypt", "kms:GenerateDataKey"]
-        Resource  = aws_kms_key.files.arn
+        Resource  = arn
         Condition = { StringEquals = { "kms:ViaService" = "s3.${var.region}.${data.aws_partition.files.dns_suffix}" } }
-      },
-    ]
+    }])
   })
 }

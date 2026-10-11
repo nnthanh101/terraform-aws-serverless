@@ -41,8 +41,8 @@ output "files_bucket" {
 }
 
 output "files_kms_key_arn" {
-  description = "Customer managed key that encrypts the files bucket. It cannot be destroyed through this module."
-  value       = aws_kms_key.files.arn
+  description = "Customer managed key that encrypts the files bucket, or null when files_kms_key is false. It cannot be destroyed through this module."
+  value       = one(aws_kms_key.files[*].arn)
 }
 
 output "function_role_arn" {

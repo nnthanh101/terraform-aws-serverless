@@ -28,6 +28,23 @@ mock_provider "aws" {
 
 mock_provider "archive" {}
 
+override_resource {
+  target          = aws_s3_bucket.files
+  override_during = plan
+  values = {
+    arn = "arn:aws:s3:::orders-dev-files-111122223333"
+  }
+}
+
+override_resource {
+  target          = aws_kms_key.files[0]
+  override_during = plan
+  values = {
+    arn    = "arn:aws:kms:aa-example-1:111122223333:key/11111111-1111-1111-1111-111111111111"
+    key_id = "11111111-1111-1111-1111-111111111111"
+  }
+}
+
 variables {
   account_id               = "111122223333"
   region                   = "aa-example-1"
@@ -344,5 +361,68 @@ run "default_caller_is_unchanged" {
   assert {
     condition     = aws_lambda_function.app.reserved_concurrent_executions == 4 && length(aws_secretsmanager_secret.secret_key) == 1 && length(random_password.secret_key) == 0 && length(aws_iam_role_policy.secret_key) == 1
     error_message = "The defaults keep concurrency 4, the Secrets Manager secret and its read policy."
+  }
+}
+
+run "files_key_default_creates_the_key_and_kms_encryption" {
+  command = plan
+
+  assert {
+    condition     = length(aws_kms_key.files) == 1 && length(aws_kms_alias.files) == 1
+    error_message = "By default the files bucket gets its customer managed key and alias."
+  }
+
+  assert {
+    condition     = alltrue([for r in aws_s3_bucket_server_side_encryption_configuration.files.rule : r.apply_server_side_encryption_by_default[0].sse_algorithm == "aws:kms"])
+    error_message = "By default the files bucket uses SSE-KMS."
+  }
+
+  assert {
+    condition     = length([for s in jsondecode(aws_iam_role_policy.files.policy).Statement : s if s.Sid == "FilesKeyThroughS3"]) == 1
+    error_message = "By default the function role may use the key through S3."
+  }
+}
+
+run "files_key_false_uses_s3_managed_encryption" {
+  command = plan
+
+  variables {
+    files_kms_key = false
+  }
+
+  assert {
+    condition     = length(aws_kms_key.files) == 0 && length(aws_kms_alias.files) == 0
+    error_message = "files_kms_key = false must create no key and no alias."
+  }
+
+  assert {
+    condition     = alltrue([for r in aws_s3_bucket_server_side_encryption_configuration.files.rule : r.apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"])
+    error_message = "files_kms_key = false must use SSE-S3 (AES256)."
+  }
+
+  assert {
+    condition     = length([for s in jsondecode(aws_iam_role_policy.files.policy).Statement : s if length([for a in tolist(s.Action) : a if startswith(a, "kms:")]) > 0]) == 0
+    error_message = "files_kms_key = false must leave no KMS statement in the function role policy."
+  }
+
+  assert {
+    condition     = output.files_kms_key_arn == null
+    error_message = "files_kms_key_arn must be null without the key."
+  }
+}
+
+run "image_environment_secret_and_no_files_key_plan_together" {
+  command = plan
+
+  variables {
+    source_dir    = null
+    image_uri     = "111122223333.dkr.ecr.aa-example-1.amazonaws.com/orders@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    secret_store  = "environment"
+    files_kms_key = false
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.package_type == "Image" && length(aws_kms_key.files) == 0 && length(aws_secretsmanager_secret.secret_key) == 0
+    error_message = "An image function with the environment secret and no files key must plan."
   }
 }
