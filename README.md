@@ -25,5 +25,5 @@ Pin an exact version. Each version is tested with `terraform test` on a mocked p
 
 ## Where this comes from
 
-This repository is generated from release `dev:9213b411ef1bf2d058004e97f18631ebbe4ab9d3` of the maintainer's private module library and is not edited by hand: a
+This repository is generated from release `terraform-aws-v5.3.0` of the maintainer's private module library and is not edited by hand: a
 change is made there and arrives with its next release (see `NOTICE` and `CHANGELOG.md`). Licensed under Apache-2.0.
