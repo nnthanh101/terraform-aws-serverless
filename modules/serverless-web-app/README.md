@@ -31,6 +31,24 @@ module "app" {
 }
 ```
 
+Optional inputs (defaults change nothing):
+
+- `extra_role_statements`: extra statements on the function role's files policy; an Allow may not grant `iam:` or `sts:`, a `*` or `<service>:*` action, or a write on resource `*`; a Deny is free.
+- `files_lifecycle_rules`: extra expiry rules (`id`, `prefix`, `expiration_days`, optional `noncurrent_expiration_days`) on the files bucket, beside the built-in one.
+- `system_log_level`: `DEBUG`, `INFO` or `WARN` for the function's system logs; `null` keeps `WARN`.
+
+A Deny that makes writes under a prefix create-only:
+
+```hcl
+extra_role_statements = [{
+  sid        = "ApprovalsCreateOnly"
+  effect     = "Deny"
+  actions    = ["s3:PutObject"]
+  resources  = ["arn:aws:s3:::<files bucket>/approvals/*"]
+  conditions = [{ test = "Null", variable = "s3:if-none-match", values = ["true"] }]
+}]
+```
+
 A complete caller, with the provider block, is in `examples/minimal`.
 
 ## Protected data
@@ -119,8 +137,10 @@ The calling root's owner, from their own terminal or the delivery pipeline's app
 | <a name="input_architecture_exception"></a> [architecture\_exception](#input\_architecture\_exception) | Why this function runs on x86\_64 instead of arm64: the reason, or the spec's exception id. Null for arm64. | `string` | `null` | no |
 | <a name="input_build_dir"></a> [build\_dir](#input\_build\_dir) | Folder where the zip of source\_dir is written. Null writes <root module folder>/.build. Ignored with package\_zip\_path. The calling root passes a path that resolves from where terraform runs. | `string` | `null` | no |
 | <a name="input_environment_variables"></a> [environment\_variables](#input\_environment\_variables) | The app's own environment variables. SERVICE, ENVIRONMENT, S3DB\_BUCKET, CORS\_ORIGIN and the signing key's name are set by this module and win over a key of the same name. | `map(string)` | `{}` | no |
+| <a name="input_extra_role_statements"></a> [extra\_role\_statements](#input\_extra\_role\_statements) | Extra statements for the function role's files policy. Allow is narrow on purpose (no iam: or sts:, no wildcard action, no "*" resource for a write); Deny is free, for conditional-write denies on the caller's own prefixes. | <pre>list(object({<br/>    sid       = string<br/>    effect    = string<br/>    actions   = list(string)<br/>    resources = list(string)<br/>    conditions = optional(list(object({<br/>      test     = string<br/>      variable = string<br/>      values   = list(string)<br/>    })), [])<br/>  }))</pre> | `[]` | no |
 | <a name="input_files_bucket_label"></a> [files\_bucket\_label](#input\_files\_bucket\_label) | The word in the data bucket's name: <prefix>-<label>-<account>; changing it on a live stack replaces the bucket, which its lifecycle refuses: move the data first. | `string` | `"files"` | no |
 | <a name="input_files_kms_key"></a> [files\_kms\_key](#input\_files\_kms\_key) | false uses S3-managed encryption at no cost; true adds a customer-managed key, about 1 USD a month, with key-level access control and audit. | `bool` | `true` | no |
+| <a name="input_files_lifecycle_rules"></a> [files\_lifecycle\_rules](#input\_files\_lifecycle\_rules) | Extra lifecycle rules on the files bucket, beside the built-in one: objects under prefix expire after expiration\_days, and noncurrent versions after noncurrent\_expiration\_days when set. | <pre>list(object({<br/>    id                         = string<br/>    prefix                     = string<br/>    expiration_days            = number<br/>    noncurrent_expiration_days = optional(number)<br/>  }))</pre> | `[]` | no |
 | <a name="input_handler"></a> [handler](#input\_handler) | Handler entry point, for example handler.handler for Python or index.handler for Node.js. | `string` | `"handler.handler"` | no |
 | <a name="input_image_uri"></a> [image\_uri](#input\_image\_uri) | ECR image that the function runs as a container image, pinned by digest (<account>.dkr.ecr.<region>.amazonaws.com/<name>@sha256:<64 hex>) so a tag can never move it. Null (the default) deploys the zip from source\_dir or package\_zip\_path; when set, neither is needed and runtime and handler are not used. | `string` | `null` | no |
 | <a name="input_jwt_audience"></a> [jwt\_audience](#input\_jwt\_audience) | Accepted JWT audiences (client IDs). Required when jwt\_issuer is set. | `list(string)` | `[]` | no |
@@ -137,6 +157,7 @@ The calling root's owner, from their own terminal or the delivery pipeline's app
 | <a name="input_site_rate_limit"></a> [site\_rate\_limit](#input\_site\_rate\_limit) | Requests per client IP in any 5-minute window before AWS WAF blocks it. | `number` | `2000` | no |
 | <a name="input_site_waf_enabled"></a> [site\_waf\_enabled](#input\_site\_waf\_enabled) | Attach an AWS WAF web ACL with the AWS common rule set and a per-IP rate limit. Adds a fixed monthly charge. | `bool` | `false` | no |
 | <a name="input_source_dir"></a> [source\_dir](#input\_source\_dir) | Folder with the built handler, zipped by this module. The calling root passes a path that resolves from where terraform runs. Set this or package\_zip\_path, not both. Not used when image\_uri is set. | `string` | `null` | no |
+| <a name="input_system_log_level"></a> [system\_log\_level](#input\_system\_log\_level) | Lambda system log level: DEBUG, INFO or WARN. null keeps WARN. | `string` | `null` | no |
 | <a name="input_throttle_burst_limit"></a> [throttle\_burst\_limit](#input\_throttle\_burst\_limit) | Short burst of requests the API accepts above the steady rate. | `number` | `100` | no |
 | <a name="input_throttle_rate_limit"></a> [throttle\_rate\_limit](#input\_throttle\_rate\_limit) | Steady-state requests per second for the whole API, before API Gateway returns 429. | `number` | `50` | no |
 | <a name="input_timeout_seconds"></a> [timeout\_seconds](#input\_timeout\_seconds) | Lambda timeout in seconds. | `number` | `15` | no |

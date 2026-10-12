@@ -13,6 +13,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_data "aws_caller_identity" {
+    defaults = {
+      account_id = "111122223333"
+    }
+  }
+
   mock_data "aws_vpcs" {
     defaults = {
       ids = ["vpc-0example00000001"]
@@ -1482,4 +1488,47 @@ run "small_account_switches_off_key_access_logs_and_long_retention" {
     condition     = [for r in aws_s3_bucket_server_side_encryption_configuration.trail.rule : r.apply_server_side_encryption_by_default[0].sse_algorithm] == ["AES256"] && aws_sns_topic.alerts.kms_master_key_id == null
     error_message = "the trail bucket falls back to SSE-S3 and the alerts topic is unencrypted so alarms can publish"
   }
+}
+
+run "imds_defaults_are_off_unless_asked" {
+  command = plan
+
+  assert {
+    condition     = length(aws_ec2_instance_metadata_defaults.this) == 0 && output.imds_tokens == null
+    error_message = "by default the baseline plans no instance metadata default, so an existing caller sees no change"
+  }
+}
+
+run "imds_v2_required_in_the_home_region" {
+  command = plan
+
+  variables {
+    imds_v2_required = true
+  }
+
+  assert {
+    condition = (
+      keys(aws_ec2_instance_metadata_defaults.this) == ["aa-example-1"] &&
+      aws_ec2_instance_metadata_defaults.this["aa-example-1"].http_tokens == "required" &&
+      aws_ec2_instance_metadata_defaults.this["aa-example-1"].http_put_response_hop_limit == 2 &&
+      aws_ec2_instance_metadata_defaults.this["aa-example-1"].region == "aa-example-1"
+    )
+    error_message = "IMDSv2 tokens are required with hop limit 2, keyed by the home Region"
+  }
+
+  assert {
+    condition     = output.imds_tokens == "required"
+    error_message = "the imds_tokens output reports the mode"
+  }
+}
+
+run "imds_v2_refused_in_the_wrong_account" {
+  command = plan
+
+  variables {
+    imds_v2_required = true
+    account_id       = "999999999999"
+  }
+
+  expect_failures = [aws_ec2_instance_metadata_defaults.this]
 }

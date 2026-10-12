@@ -44,13 +44,22 @@ mock_provider "aws" {
   }
 }
 
+# The standalone values: a single account outside AWS Organizations, with the security baseline on and every
+# Organizations-only setting (default_vpcs, lambda_concurrency_quota, resource_explorer, management_account_id) left at its default.
 variables {
-  account_id         = "123456789012"
-  region             = "ap-southeast-2"
-  github_repository  = "example-org/example-app"
-  default_branch     = "develop"
-  budget_limit_usd   = 50
-  notification_email = "owner@example.com"
+  account_id                = "123456789012"
+  region                    = "ap-southeast-2"
+  github_repositories       = ["example-org/example-app"]
+  default_branch            = "develop"
+  budget_limit_usd          = 50
+  notification_email        = "owner@example.com"
+  account_mode              = "single"
+  environments              = ["dev", "production"]
+  production_environments   = ["production"]
+  security_baseline         = true
+  change_id                 = "0073"
+  create_state_kms_key      = false
+  require_account_workspace = false
 }
 
 run "defaults_build_the_whole_baseline" {
@@ -72,7 +81,7 @@ run "defaults_build_the_whole_baseline" {
   }
 
   assert {
-    condition     = output.region_defaults["ap-southeast-2"].imds_tokens == "required" && output.region_defaults["ap-southeast-2"].ebs_encryption == null
+    condition     = output.region_defaults["ap-southeast-2"].imds_tokens == "required" && output.region_defaults["ap-southeast-2"].ebs_encryption == null && output.region_defaults["ap-southeast-2"].snapshot_bpa == null && output.region_defaults["ap-southeast-2"].ami_bpa == null
     error_message = "IMDSv2 is required by default here, and EBS encryption is owned by the security baseline, not set twice"
   }
 
@@ -141,9 +150,9 @@ run "the_numeric_ids_and_the_subject_prefix_tighten_the_trust" {
   command = plan
 
   variables {
-    github_repository_id  = "123456"
-    github_owner_id       = "654321"
-    github_subject_prefix = "repo:example-org@654321/example-app@123456"
+    github_repository_ids   = ["123456"]
+    github_owner_id         = "654321"
+    github_subject_prefixes = ["repo:example-org@654321/example-app@123456"]
   }
 
   assert {
@@ -196,10 +205,10 @@ run "a_wildcard_repository_is_refused" {
   command = plan
 
   variables {
-    github_repository = "example-org/*"
+    github_repositories = ["example-org/*"]
   }
 
-  expect_failures = [var.github_repository]
+  expect_failures = [var.github_repositories]
 }
 
 run "an_oidc_provider_of_another_account_is_refused" {
@@ -232,7 +241,45 @@ run "small_account_cost_switches_reach_the_security_baseline" {
   }
 
   assert {
-    condition     = module.security.kms_key_arn == null
+    condition     = module.security[0].kms_key_arn == null
     error_message = "security_kms_key_enabled false creates no baseline key"
   }
+}
+
+run "without_the_security_baseline_nothing_of_it_is_planned" {
+  command = plan
+
+  variables {
+    security_baseline = false
+  }
+
+  assert {
+    condition     = output.alerts_topic_arn == null && output.trail_arn == null && output.controls == null && output.region_defaults == null && length(module.security) == 0
+    error_message = "security_baseline false plans no trail, topic or control, and the security outputs are null"
+  }
+
+  assert {
+    condition     = length(output.apply_role_arns) == 2
+    error_message = "the delivery roles do not depend on the security baseline"
+  }
+}
+
+run "the_organizations_extras_plan_nothing_by_default" {
+  command = plan
+
+  assert {
+    condition     = output.default_igw_ids == {} && length(aws_servicequotas_service_quota.lambda_concurrency) == 0 && length(aws_resourceexplorer2_index.local) == 0 && length(terraform_data.management_account_guard) == 0
+    error_message = "a standalone account plans no default VPC, Lambda quota, Resource Explorer index or management guard"
+  }
+}
+
+run "the_security_baseline_needs_a_production_environment" {
+  command = plan
+
+  variables {
+    account_mode            = "landing-zone"
+    production_environments = []
+  }
+
+  expect_failures = [var.production_environments]
 }

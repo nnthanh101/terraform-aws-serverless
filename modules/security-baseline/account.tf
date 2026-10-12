@@ -45,10 +45,35 @@ resource "aws_accessanalyzer_analyzer" "this" {
   type          = "ACCOUNT"
 }
 
+# The analyzer gained a count; this keeps an existing caller's state at the same object.
+moved {
+  from = aws_accessanalyzer_analyzer.this
+  to   = aws_accessanalyzer_analyzer.this[0]
+}
+
 # No rules at all: nothing should use the default security group, and anything that does is refused.
 resource "aws_default_security_group" "this" {
   count   = var.default_security_group_lockdown_enabled && length(data.aws_vpcs.default.ids) > 0 ? 1 : 0
   vpc_id  = data.aws_vpcs.default.ids[0]
   ingress = []
   egress  = []
+}
+
+# New instances in the home Region must use IMDSv2 tokens. Off by default so an existing caller plans no change.
+# The precondition refuses a provider that signs in to another account than account_id.
+data "aws_caller_identity" "current" {}
+
+resource "aws_ec2_instance_metadata_defaults" "this" {
+  for_each = var.imds_v2_required ? toset([var.region]) : toset([])
+
+  http_put_response_hop_limit = 2
+  http_tokens                 = "required"
+  region                      = each.key
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current.account_id == var.account_id
+      error_message = "The provider signs in to ${data.aws_caller_identity.current.account_id}, not account_id: check the provider alias."
+    }
+  }
 }

@@ -149,7 +149,7 @@ output "backend_settings" {
 }
 
 output "oidc_provider_arn" {
-  description = "GitHub Actions OIDC provider the roles trust: the one this module created, or oidc_provider_arn when create_oidc_provider = false. Null with ci_roles = false."
+  description = "OIDC provider the roles trust (GitHub Actions, or Azure DevOps with ci_platform = azure-devops): the one this module created, or oidc_provider_arn when create_oidc_provider = false. Null with ci_roles = false."
   value       = var.ci_roles ? (var.create_oidc_provider ? one(aws_iam_openid_connect_provider.github[*].arn) : var.oidc_provider_arn) : null
 }
 
@@ -196,4 +196,23 @@ output "automation_guardrail_policy_json" {
 output "break_glass_user_arn" {
   description = "The break-glass user's ARN, or null when break_glass_user is false. Its password and MFA are set in the console."
   value       = var.break_glass_user ? aws_iam_user.break_glass[0].arn : null
+}
+
+output "container_repository_urls" {
+  description = "Repository URL per container_repositories name. Empty when none are listed."
+  value       = { for k, v in aws_ecr_repository.container : k => v.repository_url }
+}
+
+output "container_repository_arns" {
+  description = "Repository ARN per container_repositories name. Empty when none are listed."
+  value       = { for k, v in aws_ecr_repository.container : k => v.arn }
+}
+
+output "policy_documents" {
+  description = "The documents a reviewer reads in the plan, by name: the trust of each GitHub role, the workload boundary and the workload IAM policy of each environment. Empty with ci_roles = false."
+  value = {
+    trust        = local.ci_trust
+    boundary     = local.workload_boundary
+    workload_iam = { for e, p in aws_iam_role_policy.apply_workload_iam : e => p.policy }
+  }
 }

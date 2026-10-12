@@ -118,6 +118,29 @@ resource "aws_s3_bucket_lifecycle_configuration" "files" {
     }
   }
 
+  dynamic "rule" {
+    for_each = var.files_lifecycle_rules
+    content {
+      id     = rule.value.id
+      status = "Enabled"
+
+      filter {
+        prefix = rule.value.prefix
+      }
+
+      expiration {
+        days = rule.value.expiration_days
+      }
+
+      dynamic "noncurrent_version_expiration" {
+        for_each = rule.value.noncurrent_expiration_days == null ? [] : [rule.value.noncurrent_expiration_days]
+        content {
+          noncurrent_days = noncurrent_version_expiration.value
+        }
+      }
+    }
+  }
+
   depends_on = [aws_s3_bucket_versioning.files]
 }
 
@@ -172,6 +195,13 @@ resource "aws_iam_role_policy" "files" {
         Action    = ["kms:Decrypt", "kms:GenerateDataKey"]
         Resource  = arn
         Condition = { StringEquals = { "kms:ViaService" = "s3.${var.region}.${data.aws_partition.files.dns_suffix}" } }
-    }])
+        }], [for s in var.extra_role_statements : merge({
+          Sid      = s.sid
+          Effect   = s.effect
+          Action   = s.actions
+          Resource = s.resources
+          }, length(s.conditions) == 0 ? {} : {
+          Condition = { for t in distinct([for c in s.conditions : c.test]) : t => { for c in s.conditions : c.variable => c.values if c.test == t } }
+    })])
   })
 }

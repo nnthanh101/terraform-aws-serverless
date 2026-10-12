@@ -315,3 +315,93 @@ variable "files_bucket_label" {
     error_message = "files_bucket_label must be 1 to 20 characters: lowercase letters, digits and hyphens, not starting or ending with a hyphen."
   }
 }
+
+variable "extra_role_statements" {
+  type = list(object({
+    sid       = string
+    effect    = string
+    actions   = list(string)
+    resources = list(string)
+    conditions = optional(list(object({
+      test     = string
+      variable = string
+      values   = list(string)
+    })), [])
+  }))
+  description = "Extra statements for the function role's files policy. Allow is narrow on purpose (no iam: or sts:, no wildcard action, no \"*\" resource for a write); Deny is free, for conditional-write denies on the caller's own prefixes."
+  default     = []
+  nullable    = false
+
+  validation {
+    condition     = alltrue([for s in var.extra_role_statements : contains(["Allow", "Deny"], s.effect)])
+    error_message = "Each extra_role_statements effect must be Allow or Deny."
+  }
+
+  validation {
+    condition     = length(distinct([for s in var.extra_role_statements : s.sid])) == length(var.extra_role_statements)
+    error_message = "extra_role_statements sids must be unique."
+  }
+
+  validation {
+    condition = alltrue([for s in var.extra_role_statements : s.effect != "Allow" || alltrue([
+      for a in s.actions : !startswith(lower(a), "iam:") && !startswith(lower(a), "sts:")
+    ])])
+    error_message = "An Allow in extra_role_statements must not grant iam: or sts: actions."
+  }
+
+  validation {
+    condition = alltrue([for s in var.extra_role_statements : s.effect != "Allow" || alltrue([
+      for a in s.actions : !strcontains(a, "*") && !strcontains(a, "?")
+    ])])
+    error_message = "An Allow in extra_role_statements must not use \"*\" or \"?\" in an action."
+  }
+
+  validation {
+    condition = alltrue([for s in var.extra_role_statements : s.effect != "Allow" || !anytrue([
+      for r in s.resources : (strcontains(r, "*") || strcontains(r, "?")) && !can(regex("^arn:[a-z-]+:s3:::[a-z0-9.-]+(/[^*?]+)*/\\*$", r))
+      ]) || alltrue([
+      for a in s.actions : can(regex("^(Get|Describe|List|View|Lookup|BatchGet|Search|Query|Scan)", try(split(":", a)[1], a)))
+    ])])
+    error_message = "An Allow on a resource containing \"*\" or \"?\" (other than a trailing \"/*\" under a named S3 bucket) in extra_role_statements may only use read actions (Get, Describe, List, View, Lookup, BatchGet, Search, Query, Scan); name the resource for any other action."
+  }
+
+  validation {
+    condition = alltrue([for s in var.extra_role_statements : s.effect != "Allow" || alltrue([
+      for a in s.actions : alltrue([for w in ["credentials", "token", "passworddata", "secretvalue", "accessdetails"] : !strcontains(lower(a), w)])
+    ])])
+    error_message = "An Allow in extra_role_statements must not grant an action that returns credentials (names containing Credentials, Token, PasswordData, SecretValue or AccessDetails)."
+  }
+}
+
+variable "files_lifecycle_rules" {
+  type = list(object({
+    id                         = string
+    prefix                     = string
+    expiration_days            = number
+    noncurrent_expiration_days = optional(number)
+  }))
+  description = "Extra lifecycle rules on the files bucket, beside the built-in one: objects under prefix expire after expiration_days, and noncurrent versions after noncurrent_expiration_days when set."
+  default     = []
+  nullable    = false
+
+  validation {
+    condition     = length(distinct([for r in var.files_lifecycle_rules : r.id])) == length(var.files_lifecycle_rules) && !contains([for r in var.files_lifecycle_rules : r.id], "expire-old-versions")
+    error_message = "files_lifecycle_rules ids must be unique and not expire-old-versions."
+  }
+
+  validation {
+    condition     = alltrue([for r in var.files_lifecycle_rules : r.expiration_days >= 1 && coalesce(r.noncurrent_expiration_days, 1) >= 1])
+    error_message = "files_lifecycle_rules days must be 1 or more."
+  }
+}
+
+variable "system_log_level" {
+  type        = string
+  description = "Lambda system log level: DEBUG, INFO or WARN. null keeps WARN."
+  default     = null
+
+  validation {
+    condition     = var.system_log_level == null || contains(["DEBUG", "INFO", "WARN"], coalesce(var.system_log_level, "WARN"))
+    error_message = "system_log_level must be DEBUG, INFO, WARN or null."
+  }
+}

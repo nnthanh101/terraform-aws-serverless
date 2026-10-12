@@ -2,6 +2,11 @@
 
 Each public version is generated from one library release (conventional commits, semantic versions).
 
+## 0.5.0 (2026-10-12)
+
+Public 0.5.0 generated from library release terraform-aws-v5.6.0 (commit 2acad2f). The modules are
+serverless-web-app, bootstrap, security-baseline, account.
+
 ## 0.4.0 (2026-10-11)
 
 Public 0.4.0 generated from library release terraform-aws-v5.3.0 (commit 89b3963). The modules are

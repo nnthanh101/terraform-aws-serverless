@@ -3,7 +3,7 @@ Copyright 2026 Nhat-Thanh Nguyen (nnthanh101@gmail.com)
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-Provenance: public version 0.4.0 is generated from library release terraform-aws-v5.3.0 (commit 89b3963) by scripts/public-modules.sh.
+Provenance: public version 0.5.0 is generated from library release terraform-aws-v5.6.0 (commit 2acad2f) by scripts/public-modules.sh.
 This repository is generated; changes are made in the library and arrive with its next release.
 
 == modules/bootstrap notices ==
@@ -17,10 +17,11 @@ organization change) ported on the same day.
 Original work Copyright 2026 nnthanh101, licensed under Apache License 2.0
 (SPDX: Apache-2.0; LICENSE and NOTICE of that repository checked 2026-09-24, ADR-029).
 
-It also ports features of two earlier modules by the same author:
+It also ports features of three earlier modules by the same author:
 modules/genesis (default bucket name, lifecycle day inputs) and
 modules/github-oidc (create_oidc_provider, no thumbprint argument for GitHub's issuer, repository list,
-max_session_duration range).
+max_session_duration range) and modules/ado-oidc (Azure DevOps issuer, service connection subjects),
+both retired in 5.5.0.
 
 Modifications by Nhat-Thanh Nguyen:
 
@@ -31,6 +32,7 @@ Modifications by Nhat-Thanh Nguyen:
 - name_prefix for every delivery role and per-tenant name; the default keeps the
   template's names
 - create_oidc_provider and oidc_provider_arn; every ARN built from aws_partition
+- ci_platform = azure-devops: Azure DevOps provider, plan and apply service connections
 - github_repositories list; optional repository_id, repository_owner_id and
   job_workflow_ref claims
 - apply_policy_arns, max_session_duration, tags, noncurrent_version_expiration_days
@@ -40,16 +42,3 @@ Modifications by Nhat-Thanh Nguyen:
 - Copyright headers, examples/single-account and Tier 1 tests for each new input
 The alternate contacts and the budget that leaves credits out were ported from the
 same template on 2026-09-26 (the terraform-aws plugin repository develop 4b17276, change 0032 for the budget).
-
-== modules/github-oidc notices ==
-GitHub Actions OIDC Terraform Module
-Copyright 2026 Nhat-Thanh Nguyen (nnthanh101@gmail.com)
-
-This module is an original work by Nhat-Thanh Nguyen.
-
-It implements GitHub Actions OIDC federation for AWS IAM using the
-token.actions.githubusercontent.com provider with split-trust IAM roles
-(plan/readonly role trusted from any ref; apply role trusted from
-main branch only).
-
-This product includes no derived upstream code.
