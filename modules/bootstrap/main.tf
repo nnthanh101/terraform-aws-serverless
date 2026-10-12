@@ -26,9 +26,13 @@ locals {
   name_base     = "${local.tenant_prefix}${var.service}"
   bucket_name   = coalesce(var.state_bucket_name, "${var.account_id}-${local.tenant_prefix}tfstate-${var.region}")
 
-  oidc_arn   = var.create_oidc_provider ? "${local.iam_prefix}:oidc-provider/token.actions.githubusercontent.com" : var.oidc_provider_arn
-  bucket_arn = "arn:${local.partition}:s3:::${local.bucket_name}"
-  s3_via     = "s3.${var.region}.${local.dns_suffix}"
+  # The token issuer the roles trust: GitHub Actions, or one Azure DevOps organization.
+  ado         = var.ci_platform == "azure-devops"
+  issuer_host = local.ado ? "vstoken.dev.azure.com/${coalesce(var.ado_organization_id, "none")}" : "token.actions.githubusercontent.com"
+  oidc_aud    = local.ado ? "api://AzureADTokenExchange" : "sts.amazonaws.com"
+  oidc_arn    = var.create_oidc_provider ? "${local.iam_prefix}:oidc-provider/${local.issuer_host}" : var.oidc_provider_arn
+  bucket_arn  = "arn:${local.partition}:s3:::${local.bucket_name}"
+  s3_via      = "s3.${var.region}.${local.dns_suffix}"
   # Every delivery role of this tenant, and every workload role its apply roles create.
   delivery_role_arns = "${local.iam_prefix}:role/${var.name_prefix}-*"
   workload_role_arns = "${local.iam_prefix}:role/${var.service_role_path}/*"
@@ -85,7 +89,7 @@ locals {
   # IDs never change when a repository or owner is renamed, and a new repository cannot reuse them.
   github_id_claims = { for k, v in {
     "token.actions.githubusercontent.com:repository_id"       = length(var.github_repository_ids) > 0 ? var.github_repository_ids : null
-    "token.actions.githubusercontent.com:repository_owner_id" = var.github_owner_id
+    "token.actions.githubusercontent.com:repository_owner_id" = jsondecode(length(var.github_owner_ids) > 0 ? jsonencode(distinct(var.github_owner_ids)) : jsonencode(var.github_owner_id))
   } : k => v if v != null }
 
   github_trust = { for name, r in local.github_roles : name => jsonencode({
@@ -109,6 +113,32 @@ locals {
       } : op => claims if length(claims) > 0 }
     }]
   }) }
+
+  # Azure DevOps: the same StringEquals on aud and on an exact sub per service connection. Plan roles trust the
+  # plan connections; each apply role trusts only its environment's connections.
+  ado_plan_subs = distinct([for c in var.ado_plan_service_connections : "sc://${coalesce(var.ado_organization_name, "none")}/${c.project}/${c.name}"])
+  ado_role_subs = { for name, r in local.github_roles : name => (
+    r.suffix == "pull_request" || startswith(r.suffix, "ref:") ? local.ado_plan_subs :
+    distinct([for c in lookup(var.ado_apply_service_connections, trimprefix(r.suffix, "environment:"), []) : "sc://${coalesce(var.ado_organization_name, "none")}/${c.project}/${c.name}"])
+  ) }
+  ado_trust = { for name, subs in local.ado_role_subs : name => jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "AzureDevOpsOidc"
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = local.oidc_arn }
+      Condition = {
+        StringEquals = {
+          "${local.issuer_host}:aud" = local.oidc_aud
+          "${local.issuer_host}:sub" = subs
+        }
+      }
+    }]
+  }) }
+
+  ci_trust = local.ado ? local.ado_trust : local.github_trust
+  ci_subs  = local.ado ? local.ado_role_subs : local.role_subs
 
   # Explicit denies that keep plan roles away from application data, secrets and tokens.
   # A plan refreshes resource settings only; none of these reads is needed for it.
@@ -207,7 +237,7 @@ locals {
         Effect    = "Allow"
         Action    = "iam:PassRole"
         Resource  = "${local.iam_prefix}:role/${var.service_role_path}/${e}/*"
-        Condition = { StringEquals = { "iam:PassedToService" = ["lambda.amazonaws.com", "states.amazonaws.com"] } }
+        Condition = { StringEquals = { "iam:PassedToService" = concat(["lambda.amazonaws.com", "states.amazonaws.com"], var.passrole_services) } }
       },
       {
         # An explicit deny, so a broader policy attached later still cannot create a role, or set
@@ -399,6 +429,12 @@ locals {
       },
       ],
       [for s in local.security_baseline_denies : s if var.protect_security_baseline],
+      length(lookup(var.workload_boundary_extra_actions, e, [])) > 0 ? [{
+        Sid      = "WorkloadExtraReads"
+        Effect   = "Allow"
+        Action   = var.workload_boundary_extra_actions[e]
+        Resource = "*"
+      }] : [],
     [for s in local.production_deny_resources : s if contains(local.production_deny_envs, e)])
   }) }
 }
@@ -661,10 +697,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
 # with ci_roles = false there is none.
 resource "aws_iam_openid_connect_provider" "github" {
   count          = var.ci_roles && var.create_oidc_provider ? 1 : 0
-  url            = "https://token.actions.githubusercontent.com"
-  client_id_list = ["sts.amazonaws.com"]
+  url            = "https://${local.issuer_host}"
+  client_id_list = [local.oidc_aud]
 
-  # AWS supplies the thumbprint for GitHub's issuer, so the argument is left out to keep plans clean.
+  # The argument thumbprint_list is left out: AWS supplies the thumbprint for GitHub's issuer, and IAM retrieves
+  # it for Azure DevOps's, so plans stay clean.
 
   tags = local.tags
 }
@@ -672,8 +709,8 @@ resource "aws_iam_openid_connect_provider" "github" {
 resource "aws_iam_role" "plan" {
   for_each             = local.plan_roles
   name                 = each.value.name
-  description          = "Read-only Terraform plans from ${join(", ", local.role_subs[each.value.name])}"
-  assume_role_policy   = local.github_trust[each.value.name]
+  description          = "Read-only Terraform plans from ${join(", ", local.ci_subs[each.value.name])}"
+  assume_role_policy   = local.ci_trust[each.value.name]
   max_session_duration = var.max_session_duration
   tags                 = local.tags
 
@@ -757,8 +794,8 @@ resource "aws_iam_policy" "workload_boundary" {
 resource "aws_iam_role" "apply" {
   for_each             = local.ci_environments
   name                 = "${var.name_prefix}-apply-${each.key}"
-  description          = "Terraform apply for ${each.key}, only from the GitHub Environment ${each.key}"
-  assume_role_policy   = local.github_trust["${var.name_prefix}-apply-${each.key}"]
+  description          = "Terraform apply for ${each.key}, only from ${local.ado ? "its Azure DevOps service connections" : "the GitHub Environment ${each.key}"}"
+  assume_role_policy   = local.ci_trust["${var.name_prefix}-apply-${each.key}"]
   max_session_duration = var.max_session_duration
   tags                 = local.tags
 
@@ -963,4 +1000,58 @@ resource "aws_api_gateway_account" "this" {
   cloudwatch_role_arn = aws_iam_role.api_gateway_logs[0].arn
 
   depends_on = [aws_iam_role_policy_attachment.api_gateway_logs]
+}
+
+# ------------------------------------------------------------------ container image registries
+
+# One image registry per name, account-level: the image is built once and promoted by digest, so no environment owns it.
+resource "aws_ecr_repository" "container" {
+  # checkov:skip=CKV_AWS_136:0072: images hold no secrets; provider-managed AES256 avoids a key's monthly cost, the same choice as the kit's registry
+  for_each = toset(var.container_repositories)
+
+  name                 = each.value
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = local.tags
+}
+
+# Only untagged images beyond the newest 20 expire; a tagged image (pinned by digest) is never removed.
+resource "aws_ecr_lifecycle_policy" "container" {
+  for_each = aws_ecr_repository.container
+
+  repository = each.value.name
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Expire untagged images beyond the newest 20"
+      selection    = { tagStatus = "untagged", countType = "imageCountMoreThan", countNumber = 20 }
+      action       = { type = "expire" }
+    }]
+  })
+}
+
+# Lambda functions in this account and Region may pull the image (AWS's documented cross-service form).
+resource "aws_ecr_repository_policy" "container" {
+  for_each = aws_ecr_repository.container
+
+  repository = each.value.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "LambdaPull"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+      Condition = { StringLike = { "aws:sourceArn" = "arn:${local.partition}:lambda:${var.region}:${var.account_id}:function:*" } }
+    }]
+  })
 }

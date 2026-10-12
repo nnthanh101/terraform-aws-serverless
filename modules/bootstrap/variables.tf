@@ -23,18 +23,35 @@ variable "region" {
   }
 }
 
-variable "github_repositories" {
-  description = "Repositories the GitHub roles trust, each as <organisation>/<repository>. Every role trusts the exact subject of each one."
-  type        = list(string)
+variable "ci_platform" {
+  description = "The pipeline platform the roles trust: github (GitHub Actions, the default) or azure-devops (Azure DevOps service connections). Everything else the module builds is the same for both."
+  type        = string
+  default     = "github"
 
   validation {
-    condition     = length(var.github_repositories) > 0 && alltrue([for r in var.github_repositories : can(regex("^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$", r))])
+    condition     = contains(["github", "azure-devops"], var.ci_platform)
+    error_message = "ci_platform must be github or azure-devops."
+  }
+}
+
+variable "github_repositories" {
+  description = "Repositories the GitHub roles trust, each as <organisation>/<repository>. Every role trusts the exact subject of each one. Required with ci_platform = github; not used with azure-devops."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = var.ci_platform != "github" || (length(var.github_repositories) > 0 && alltrue([for r in var.github_repositories : can(regex("^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$", r))]))
     error_message = "github_repositories must list at least one <organisation>/<repository>, with no wildcard."
   }
 
   validation {
     condition     = length(distinct(var.github_repositories)) == length(var.github_repositories)
     error_message = "github_repositories must not list a repository twice."
+  }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || length(var.github_repositories) == 0
+    error_message = "github_repositories is a GitHub input; leave it empty with ci_platform = azure-devops."
   }
 }
 
@@ -51,6 +68,11 @@ variable "github_repository_ids" {
   validation {
     condition     = length(var.github_repository_ids) == 0 || length(var.github_repository_ids) == length(var.github_repositories)
     error_message = "github_repository_ids must be empty or give one ID for each entry of github_repositories."
+  }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || length(var.github_repository_ids) == 0
+    error_message = "github_repository_ids is a GitHub input; leave it empty with ci_platform = azure-devops."
   }
 }
 
@@ -78,6 +100,11 @@ variable "github_subject_prefixes" {
     ])
     error_message = "Each github_subject_prefixes entry must name the repository at the same position of github_repositories, with both names followed by @<numeric id> or neither."
   }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || length(var.github_subject_prefixes) == 0
+    error_message = "github_subject_prefixes is a GitHub input; leave it empty with ci_platform = azure-devops."
+  }
 }
 
 variable "github_owner_id" {
@@ -88,6 +115,176 @@ variable "github_owner_id" {
   validation {
     condition     = var.github_owner_id == null ? true : can(regex("^[0-9]+$", var.github_owner_id))
     error_message = "github_owner_id must be a numeric GitHub owner ID."
+  }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || var.github_owner_id == null
+    error_message = "github_owner_id is a GitHub input; leave it empty with ci_platform = azure-devops."
+  }
+}
+
+variable "github_owner_ids" {
+  description = "Numeric GitHub owner IDs of github_repositories, in the same order, for repositories held by more than one organisation. When set, the repository_owner_id claim lists the distinct IDs. Do not set together with github_owner_id."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for i in var.github_owner_ids : can(regex("^[0-9]+$", i))])
+    error_message = "Each github_owner_ids entry must be a numeric GitHub owner ID."
+  }
+
+  validation {
+    condition     = length(var.github_owner_ids) == 0 || length(var.github_owner_ids) == length(var.github_repositories)
+    error_message = "github_owner_ids must be empty or give one ID for each entry of github_repositories."
+  }
+
+  validation {
+    condition     = length(var.github_owner_ids) == 0 || var.github_owner_id == null
+    error_message = "Set github_owner_id or github_owner_ids, not both."
+  }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || length(var.github_owner_ids) == 0
+    error_message = "github_owner_ids is a GitHub input; leave it empty with ci_platform = azure-devops."
+  }
+}
+
+# ------------------------------------------------------------------ Azure DevOps (ci_platform = "azure-devops")
+
+variable "ado_organization_id" {
+  description = "Azure DevOps organization GUID (lower-case); part of the token issuer https://vstoken.dev.azure.com/<GUID>. Required with ci_platform = azure-devops and ci_roles = true; refused with github."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.ci_platform == "github" ? var.ado_organization_id == null : (!var.ci_roles || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", coalesce(var.ado_organization_id, "-"))))
+    error_message = "ado_organization_id must be a lower-case GUID such as 11111111-1111-1111-1111-111111111111 with ci_platform = azure-devops, and must stay null with github."
+  }
+}
+
+variable "ado_organization_name" {
+  description = "Azure DevOps organization name, the first segment of the subject sc://<organization>/<project>/<connection>. No wildcard characters. Required with ci_platform = azure-devops and ci_roles = true; refused with github."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.ci_platform == "github" ? var.ado_organization_name == null : (!var.ci_roles || (length(trimspace(coalesce(var.ado_organization_name, ""))) > 0 && !can(regex("[*?$/]", coalesce(var.ado_organization_name, "")))))
+    error_message = "ado_organization_name must be set, without * ? $ or /, with ci_platform = azure-devops, and must stay null with github."
+  }
+}
+
+variable "ado_plan_service_connections" {
+  description = "Service connections the two plan roles trust, each { project, name }. Exact names only; at least one with ci_platform = azure-devops and ci_roles = true; refused with github."
+  type = list(object({
+    project = string
+    name    = string
+  }))
+  default = []
+
+  validation {
+    condition     = var.ci_platform == "azure-devops" || length(var.ado_plan_service_connections) == 0
+    error_message = "ado_plan_service_connections is for ci_platform = azure-devops; leave it empty with github."
+  }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || !var.ci_roles || length(var.ado_plan_service_connections) > 0
+    error_message = "ado_plan_service_connections needs at least one service connection with ci_platform = azure-devops."
+  }
+
+  validation {
+    condition     = alltrue([for c in var.ado_plan_service_connections : length(trimspace(c.project)) > 0 && length(trimspace(c.name)) > 0])
+    error_message = "Every plan service connection needs a non-empty project and name."
+  }
+
+  validation {
+    condition     = alltrue([for c in var.ado_plan_service_connections : !can(regex("[*?$/]", c.project)) && !can(regex("[*?$/]", c.name))])
+    error_message = "Plan service connection project and name must not contain * ? $ or /, so a subject can never be a pattern."
+  }
+}
+
+variable "ado_apply_service_connections" {
+  description = "Per environment, the service connections its apply role trusts, each { project, name }. Every entry of environments needs at least one with ci_platform = azure-devops and ci_roles = true; keys must be entries of environments; refused with github."
+  type = map(list(object({
+    project = string
+    name    = string
+  })))
+  default = {}
+
+  validation {
+    condition     = var.ci_platform == "azure-devops" || length(var.ado_apply_service_connections) == 0
+    error_message = "ado_apply_service_connections is for ci_platform = azure-devops; leave it empty with github."
+  }
+
+  validation {
+    condition     = alltrue([for e in keys(var.ado_apply_service_connections) : contains(var.environments, e)])
+    error_message = "ado_apply_service_connections may name only entries of environments."
+  }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || !var.ci_roles || alltrue([for e in var.environments : length(lookup(var.ado_apply_service_connections, e, [])) > 0])
+    error_message = "With ci_platform = azure-devops every entry of environments needs at least one apply service connection."
+  }
+
+  # A connection is trusted by one role set only: ADO names are case-insensitive, so compare lower-cased.
+  validation {
+    condition = (
+      length(concat(distinct([for c in var.ado_plan_service_connections : lower("${c.project}/${c.name}")]), flatten([for e, cs in var.ado_apply_service_connections : distinct([for c in cs : lower("${c.project}/${c.name}")])])))
+      == length(distinct(concat([for c in var.ado_plan_service_connections : lower("${c.project}/${c.name}")], flatten([for e, cs in var.ado_apply_service_connections : distinct([for c in cs : lower("${c.project}/${c.name}")])]))))
+    )
+    error_message = "A service connection may be trusted by only one of the plan roles and each apply environment: ado_apply_service_connections must be disjoint from ado_plan_service_connections and between environments (names compared case-insensitively)."
+  }
+
+  validation {
+    condition     = alltrue([for e, cs in var.ado_apply_service_connections : alltrue([for c in cs : length(trimspace(c.project)) > 0 && length(trimspace(c.name)) > 0 && !can(regex("[*?$/]", c.project)) && !can(regex("[*?$/]", c.name))])])
+    error_message = "Every apply service connection needs a non-empty project and name without * ? $ or /, so a subject can never be a pattern."
+  }
+}
+
+variable "workload_boundary_extra_actions" {
+  description = "Per environment, extra read actions (no wildcard; no iam, sts or organizations) added to that environment's workload boundary."
+  type        = map(list(string))
+  default     = {}
+
+  validation {
+    condition     = alltrue([for e in keys(var.workload_boundary_extra_actions) : contains(var.environments, e)])
+    error_message = "workload_boundary_extra_actions keys must be entries of environments."
+  }
+
+  validation {
+    condition     = alltrue([for e, l in var.workload_boundary_extra_actions : alltrue([for a in l : can(regex("^[a-z0-9-]+:(Get|Describe|List|View|Lookup|BatchGet|Search)[A-Za-z0-9]*$", a)) && !startswith(a, "iam:") && !startswith(a, "sts:") && !startswith(a, "organizations:")])])
+    error_message = "Each workload_boundary_extra_actions entry must be an enumerated read action such as bedrock:GetAgent: no wildcard, and no iam, sts or organizations action."
+  }
+
+  validation {
+    condition     = alltrue([for e, l in var.workload_boundary_extra_actions : alltrue([for a in l : !can(regex("(?i)(Credentials|Token|PasswordData|SecretValue|AccessDetails)", a))])])
+    error_message = "workload_boundary_extra_actions must not list an action that returns credentials, such as redshift:GetClusterCredentials, ecr:GetAuthorizationToken or ec2:GetPasswordData."
+  }
+}
+
+variable "passrole_services" {
+  description = "Extra service principals (for example bedrock-agentcore.amazonaws.com) the apply roles may pass workload roles to, besides Lambda and Step Functions."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for s in var.passrole_services : can(regex("^[a-z0-9-]+(\\.[a-z0-9-]+)*\\.amazonaws\\.com$", s))])
+    error_message = "Each passrole_services entry must be a service principal ending in .amazonaws.com."
+  }
+
+  validation {
+    condition     = length(setintersection(var.passrole_services, ["cloudformation.amazonaws.com", "codebuild.amazonaws.com", "ec2.amazonaws.com"])) == 0
+    error_message = "passrole_services must not list cloudformation, codebuild or ec2: they run arbitrary code with the passed role."
+  }
+}
+
+variable "container_repositories" {
+  description = "Names of container image registries (ECR) for apps shipped as Lambda container images: immutable tags, scan on push, AES256, untagged images expire beyond the newest 20, Lambda in this account may pull. Empty creates none."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for n in var.container_repositories : can(regex("^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$", n)) && length(n) >= 2 && length(n) <= 256])
+    error_message = "Each container_repositories name must be a valid ECR name: lower-case letters, digits and . _ - separators (and / for a path), 2 to 256 characters."
   }
 }
 
@@ -116,6 +313,11 @@ variable "apply_workflow_refs" {
       for r in refs : can(regex("^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+/\\.github/workflows/[^@]+@.+$", r))
     ])])
     error_message = "Each apply_workflow_refs entry must list at least one <organisation>/<repository>/.github/workflows/<file>@<ref>."
+  }
+
+  validation {
+    condition     = var.ci_platform != "azure-devops" || length(var.apply_workflow_refs) == 0
+    error_message = "apply_workflow_refs is a GitHub input; leave it empty with ci_platform = azure-devops."
   }
 }
 
@@ -318,19 +520,19 @@ variable "max_session_duration" {
 # ------------------------------------------------------------------ once per account and Region
 
 variable "ci_roles" {
-  description = "Create the GitHub OIDC trust and the plan and apply roles. Turn it off in an organization's management account: a person applies the landing zone there, so the account needs its state bucket, key and budget only."
+  description = "Create the OIDC trust (GitHub or Azure DevOps, per ci_platform) and the plan and apply roles. Turn it off in an organization's management account: a person applies the landing zone there, so the account needs its state bucket, key and budget only."
   type        = bool
   default     = true
 }
 
 variable "create_oidc_provider" {
-  description = "Create the account's GitHub OIDC provider. An account holds only one; a second tenant in the same account sets false and passes oidc_provider_arn. Ignored with ci_roles = false."
+  description = "Create the account's OIDC provider for the ci_platform issuer (GitHub or Azure DevOps). An account holds only one; a second tenant in the same account sets false and passes oidc_provider_arn. Ignored with ci_roles = false."
   type        = bool
   default     = true
 }
 
 variable "oidc_provider_arn" {
-  description = "ARN of the account's existing GitHub OIDC provider. Required when create_oidc_provider = false, and refused otherwise. Ignored with ci_roles = false."
+  description = "ARN of the account's existing OIDC provider for the ci_platform issuer. Required when create_oidc_provider = false, and refused otherwise. Ignored with ci_roles = false."
   type        = string
   default     = null
 
@@ -338,9 +540,9 @@ variable "oidc_provider_arn" {
     # With ci_roles = false the module trusts no provider, so none is required.
     condition = !var.ci_roles || (
       var.create_oidc_provider ? var.oidc_provider_arn == null :
-      can(regex("^arn:aws[a-z-]*:iam::${var.account_id}:oidc-provider/token\\.actions\\.githubusercontent\\.com$", var.oidc_provider_arn))
+      can(regex(var.ci_platform == "azure-devops" ? "^arn:aws[a-z-]*:iam::${var.account_id}:oidc-provider/vstoken\\.dev\\.azure\\.com/${coalesce(var.ado_organization_id, "none")}$" : "^arn:aws[a-z-]*:iam::${var.account_id}:oidc-provider/token\\.actions\\.githubusercontent\\.com$", var.oidc_provider_arn))
     )
-    error_message = "With create_oidc_provider = false, set oidc_provider_arn to this account's GitHub provider, arn:<partition>:iam::<account_id>:oidc-provider/token.actions.githubusercontent.com. With create_oidc_provider = true, leave it null."
+    error_message = "With create_oidc_provider = false, set oidc_provider_arn to this account's provider for the ci_platform issuer: arn:<partition>:iam::<account_id>:oidc-provider/token.actions.githubusercontent.com for github, or .../vstoken.dev.azure.com/<ado_organization_id> for azure-devops. With create_oidc_provider = true, leave it null."
   }
 }
 

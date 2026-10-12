@@ -341,3 +341,9 @@ variable "access_analyzer_enabled" {
   description = "Create the account's IAM Access Analyzer (type ACCOUNT). An account may hold only one per Region: set false when it already has one, and its findings still reach the alerts topic."
   default     = true
 }
+
+variable "imds_v2_required" {
+  type        = bool
+  description = "Require IMDSv2 tokens for new instances in the home Region (hop limit 2). Off by default; the account-wide default can be set once per Region."
+  default     = false
+}

@@ -1,14 +1,19 @@
 # security-baseline module
 
-One AWS account's security baseline: every management API call, read and write, recorded in every Region (object reads and writes only for the buckets named in `s3_data_event_bucket_names`, none by default), the signals that matter sent to one encrypted topic that emails a person, and a deny-only policy that denies the delivery pipeline's apply roles the switch-off and tamper actions [SECURITY-BASELINE.md](SECURITY-BASELINE.md) lists. It is a deny-list on top of PowerUserAccess, so a route it does not list stays open; the owner decided on 25 Sep 2026 to keep it and deny each route an audit finds (decision 0010), and SECURITY-BASELINE.md, "Open routes (audit of 25 Sep)", says how each route that audit found was closed or accepted. Each control that adds a monthly charge is a switch, off by default.
+One AWS account's security baseline. It records every management API call, read and write, in every Region. Object reads and writes are recorded only for the buckets named in `s3_data_event_bucket_names`, none by default. The signals that matter go to one encrypted topic that emails a person. A deny-only policy stops the delivery pipeline's apply roles from the switch-off and tamper actions [SECURITY-BASELINE.md](SECURITY-BASELINE.md) lists. It is a deny-list on top of PowerUserAccess, so a route it does not list stays open. Each route found later gets a deny, or an entry under "Known gaps" in SECURITY-BASELINE.md. Each control that adds a monthly charge is a switch, off by default.
 
 Why each control is in or out, what it costs in ap-southeast-6 and which SOC 2 criteria it serves: [SECURITY-BASELINE.md](SECURITY-BASELINE.md). The deploy steps belong to the root that calls it.
 
 ## What it builds
 
 - **Record** (`trail.tf`, `kms.tf`): a multi-Region trail with log file validation, into a versioned, private bucket and a log group, both kept `log_retention_days`; the bucket's own access logs in a second bucket; one customer managed key for the trail, the log group and the topic, rotated yearly. The key and the trail bucket carry `prevent_destroy`.
-- **Tell** (`alerts.tf`, `alarms.tf`, `detect.tf`, `dashboard.tf`): the topic `<name_prefix>-alerts` with one email subscription, which the administrator confirms with a signed request (QUICKSTART, step 7); four CIS metric filters and their alarms, a trail-delivery alarm, and a break-glass-use alarm while BreakGlassAdmin exists; EventBridge rules for Access Analyzer findings and, with their switches, GuardDuty and Security Hub findings; the dashboard `<name_prefix>-overview`, 8 widgets. The filters count into the `SecurityBaseline` metric namespace, which SecurityBaselineProtect and the bootstrap's workload boundary deny `cloudwatch:PutMetricData` into. The alarms on a single event read the metric's maximum; the refused-calls filter has no default value and its alarm counts the matching events (SampleCount) over 5 minutes. That the SampleCount counts each refused call when several land in the same minute is not yet proved on AWS; acceptance criterion AC-7 checks it on the first apply (QUICKSTART, Show it in 10 minutes, step 5). Every filter publishes, and every alarm on one reads, unit `Count`, so a datapoint in another unit is aggregated apart. A datapoint written from elsewhere in `Count` can raise either reading, never lower it, so it can cause a false alarm but not hold a real one down (SECURITY-BASELINE.md, Known gaps).
-- **Harden** (`account.tf`): the IAM password policy, S3 Block Public Access for the account, EBS encryption by default, snapshot block public access, SSM document public sharing off, an account Access Analyzer, and the default VPC's default security group emptied.
+- **Tell** (`alerts.tf`, `alarms.tf`, `detect.tf`, `dashboard.tf`): the topic `<name_prefix>-alerts` with one email subscription. The administrator confirms it with a signed request (`aws sns confirm-subscription --authenticate-on-unsubscribe true`).
+  - Alarms: four CIS metric filters and their alarms, a trail-delivery alarm, and a break-glass-use alarm while BreakGlassAdmin exists.
+  - Findings: EventBridge rules for Access Analyzer findings and, with their switches, GuardDuty and Security Hub findings. The dashboard is `<name_prefix>-overview`, 8 widgets.
+  - Metrics: the filters count into the `SecurityBaseline` metric namespace, which SecurityBaselineProtect and the bootstrap's workload boundary deny `cloudwatch:PutMetricData` into. The alarms on a single event read the metric's maximum. The refused-calls filter has no default value, and its alarm counts the matching events (SampleCount) over 5 minutes.
+  - Not yet proved on AWS: that the SampleCount counts each refused call when several land in the same minute. Check it on the first apply.
+  - Every filter publishes, and every alarm on one reads, unit `Count`, so a datapoint in another unit is aggregated apart. A datapoint written from elsewhere in `Count` can raise either reading, never lower it: it can cause a false alarm but not hold a real one down (SECURITY-BASELINE.md, Known gaps).
+- **Harden** (`account.tf`): the IAM password policy, S3 Block Public Access for the account, EBS encryption by default, snapshot block public access, SSM document public sharing off, an account Access Analyzer, the default VPC's default security group emptied, and, with `imds_v2_required`, IMDSv2 tokens for new instances.
 - **Switches** (`detect.tf`, `waf.tf`): GuardDuty, AWS Config, Security Hub, Inspector and a web ACL, all off by default.
 - **People and protection** (`iam.tf`, `protect.tf`): BreakGlassAdmin, SecurityAuditor and DeveloperTemplate, each only when someone is named for it; SecurityBaselineProtect, a deny-only policy attached to the apply roles named.
 
@@ -67,6 +72,7 @@ The calling root sets the provider's `allowed_account_ids` and `default_tags`, a
 | `access_analyzer_enabled` | `true` | Create the account Access Analyzer; set false when the account already has one (one ACCOUNT analyzer per Region) |
 | `kms_key_enabled` | `true` | One customer-managed key (about $1.00 per key version per month) for the trail files, log group and alerts topic; false encrypts the trail bucket with S3-managed keys and creates no key |
 | `pipeline_role_patterns` | `["gha-*", "workload/*"]` | Roles the key, bucket and topic policies deny, whatever their own policies say |
+| `protected_key_tag` | `{ key = "lz:protected", value = "true" }` | Tag on the baseline key so the organization's protect-security-logging guardrail covers it; `null` leaves the key untagged |
 
 Each input is validated at plan time; `variables.tf` states every rule and its message.
 
@@ -102,9 +108,9 @@ task test:tier1 MODULE=security-baseline
 
 `task build:validate MODULE=security-baseline` and `task build:lint MODULE=security-baseline` add the format, validate, tflint and checkov steps. Each scanner suppression in this module sits beside its reason.
 
-## Nested module
+## Instance metadata
 
-`modules/account-guardrails` sets account-level settings for an account that does not run this baseline (the members of a tenant): the S3 public access block, the password policy and, per Region, EBS encryption, the snapshot and AMI blocks and the instance metadata defaults. This module's `account.tf` sets the same first four for its own account; the two are not called for one account with the same switches on.
+`imds_v2_required = true` requires IMDSv2 tokens (hop limit 2) for new instances in the home Region. It is off by default, so an existing caller plans no change. The provider must sign in to `account_id`, or the plan is refused.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -133,6 +139,7 @@ task test:tier1 MODULE=security-baseline
 | [aws_default_security_group.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/default_security_group) | resource |
 | [aws_ebs_encryption_by_default.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_encryption_by_default) | resource |
 | [aws_ebs_snapshot_block_public_access.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_snapshot_block_public_access) | resource |
+| [aws_ec2_instance_metadata_defaults.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ec2_instance_metadata_defaults) | resource |
 | [aws_guardduty_detector.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector) | resource |
 | [aws_guardduty_detector_feature.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector_feature) | resource |
 | [aws_iam_account_password_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_account_password_policy) | resource |
@@ -192,6 +199,7 @@ task test:tier1 MODULE=security-baseline
 | <a name="input_default_security_group_lockdown_enabled"></a> [default\_security\_group\_lockdown\_enabled](#input\_default\_security\_group\_lockdown\_enabled) | Remove every rule from the default VPC's default security group in the home Region, and deny adding rules in that VPC to the delivery roles. | `bool` | `true` | no |
 | <a name="input_developer_environments"></a> [developer\_environments](#input\_developer\_environments) | Environments whose logs and functions DeveloperTemplate may read and invoke, by the <service>-<environment>- naming rule. | `list(string)` | <pre>[<br/>  "dev"<br/>]</pre> | no |
 | <a name="input_guardduty_enabled"></a> [guardduty\_enabled](#input\_guardduty\_enabled) | GuardDuty in the home Region, with S3 data events and EBS malware protection, and its high-severity findings sent to the alerts topic. | `bool` | `false` | no |
+| <a name="input_imds_v2_required"></a> [imds\_v2\_required](#input\_imds\_v2\_required) | Require IMDSv2 tokens for new instances in the home Region (hop limit 2). Off by default; the account-wide default can be set once per Region. | `bool` | `false` | no |
 | <a name="input_inspector_enabled"></a> [inspector\_enabled](#input\_inspector\_enabled) | Amazon Inspector scanning of EC2, ECR and Lambda in the home Region. | `bool` | `false` | no |
 | <a name="input_inspector_resource_types"></a> [inspector\_resource\_types](#input\_inspector\_resource\_types) | What Inspector scans when inspector\_enabled is on. | `list(string)` | <pre>[<br/>  "EC2",<br/>  "ECR",<br/>  "LAMBDA"<br/>]</pre> | no |
 | <a name="input_kms_key_enabled"></a> [kms\_key\_enabled](#input\_kms\_key\_enabled) | One customer-managed key for the trail files, the trail log group and the alerts topic. False uses S3-managed encryption (SSE-S3) for the trail bucket, leaves the log group and the alerts topic on the service's default, and creates no key. | `bool` | `true` | no |
@@ -220,7 +228,8 @@ task test:tier1 MODULE=security-baseline
 | <a name="output_alerts_topic_arn"></a> [alerts\_topic\_arn](#output\_alerts\_topic\_arn) | The alerts topic. Workload roots set it as alarm\_topic\_arn, so every alarm of the account reaches the same people. |
 | <a name="output_controls"></a> [controls](#output\_controls) | Which controls this account has, one boolean each, so a review reads the choices without the tfvars. |
 | <a name="output_dashboard_url"></a> [dashboard\_url](#output\_dashboard\_url) | Console address of the security dashboard. |
-| <a name="output_kms_key_arn"></a> [kms\_key\_arn](#output\_kms\_key\_arn) | The baseline key: trail files, the trail log group and the alerts topic. |
+| <a name="output_imds_tokens"></a> [imds\_tokens](#output\_imds\_tokens) | The IMDS token mode set for new instances in the home Region: required, or null when imds\_v2\_required is false. |
+| <a name="output_kms_key_arn"></a> [kms\_key\_arn](#output\_kms\_key\_arn) | The baseline key: trail files, the trail log group and the alerts topic. Null when kms\_key\_enabled is false. |
 | <a name="output_metric_filter_patterns"></a> [metric\_filter\_patterns](#output\_metric\_filter\_patterns) | Filter key to the metric filter pattern on the trail log group, for review and for test-metric-filter. |
 | <a name="output_protect_policy_arn"></a> [protect\_policy\_arn](#output\_protect\_policy\_arn) | SecurityBaselineProtect, attached to every apply role named and to DeveloperTemplate when it exists. |
 | <a name="output_protect_policy_names"></a> [protect\_policy\_names](#output\_protect\_policy\_names) | The names of the two deny-only policies: <protect\_policy\_prefix>Protect and <protect\_policy\_prefix>ProtectWebAcl (the second exists only while the web ACL does). |

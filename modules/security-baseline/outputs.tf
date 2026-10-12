@@ -69,3 +69,8 @@ output "controls" {
   description = "Which controls this account has, one boolean each, so a review reads the choices without the tfvars."
   value       = local.controls
 }
+
+output "imds_tokens" {
+  description = "The IMDS token mode set for new instances in the home Region: required, or null when imds_v2_required is false."
+  value       = try(one(values(aws_ec2_instance_metadata_defaults.this)).http_tokens, null)
+}

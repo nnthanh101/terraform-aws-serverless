@@ -126,7 +126,7 @@ resource "aws_lambda_function" "app" {
     log_format            = "JSON"
     log_group             = aws_cloudwatch_log_group.app.name
     application_log_level = "INFO"
-    system_log_level      = "WARN"
+    system_log_level      = coalesce(var.system_log_level, "WARN")
   }
 
   # The key's value is written before the function exists, so no start-up finds the secret empty

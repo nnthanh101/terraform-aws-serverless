@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Serverless modules for AWS</title>
+<meta name="description" content="Six slides on the public Terraform modules for serverless apps on AWS: the two tracks, what an account gets, the request path, a new app in five steps, versions and upgrades, and everyday cases.">
+<style>
+:root{
+  --ground:#EBEFF3; --surface:#FFFFFF; --sunk:#F4F6F8; --ink:#142133; --muted:#556476; --faint:#8593A3; --rule:#D5DCE3;
+  --accent:#1D5596; --accent-soft:#E2EBF6;
+  --deck:#12233B; --deck-ink:#F2F5F9; --deck-muted:#A9B7C8; --deck-rule:#2A3E5A; --deck-panel:#1A2F4D;
+  --go:#1E7049; --go-soft:#DDF0E5; --stop:#A23A2E; --stop-soft:#F7E0DC;
+  --wait:#8F5C0E; --wait-soft:#F6EAD3; --later:#5B6677; --later-soft:#E4E8EE;
+  --human:#6446A8; --human-soft:#ECE6F7; --teal:#177E86; --teal-soft:#DDF1F2;
+  --aws:#B4530A; --aws-soft:#FBEBDD;
+  --display:"Hanken Grotesk","IBM Plex Sans",Arial,"Liberation Sans",system-ui,sans-serif;
+  --sans:"IBM Plex Sans",Arial,"Liberation Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark; --ground:#0F151D; --surface:#17202B; --sunk:#131B24; --ink:#E7ECF2; --muted:#9FACBB; --faint:#75828F; --rule:#2A3542;
+  --accent:#86B6EA; --accent-soft:#1D3048;
+  --deck:#1B2D47; --deck-ink:#F2F5F9; --deck-muted:#A9B9CC; --deck-rule:#34496A; --deck-panel:#233A5B;
+  --go:#7FD1A6; --go-soft:#173428; --stop:#F0978C; --stop-soft:#3D211D;
+  --wait:#E6B568; --wait-soft:#3A2D15; --later:#AAB4C2; --later-soft:#252E3A;
+  --human:#B9A2EE; --human-soft:#2B2442; --teal:#6FD0D6; --teal-soft:#15343A;
+  --aws:#F5A65B; --aws-soft:#3A2817;}}
+:root[data-theme="dark"]{
+  color-scheme:dark; --ground:#0F151D; --surface:#17202B; --sunk:#131B24; --ink:#E7ECF2; --muted:#9FACBB; --faint:#75828F; --rule:#2A3542;
+  --accent:#86B6EA; --accent-soft:#1D3048;
+  --deck:#1B2D47; --deck-ink:#F2F5F9; --deck-muted:#A9B9CC; --deck-rule:#34496A; --deck-panel:#233A5B;
+  --go:#7FD1A6; --go-soft:#173428; --stop:#F0978C; --stop-soft:#3D211D;
+  --wait:#E6B568; --wait-soft:#3A2D15; --later:#AAB4C2; --later-soft:#252E3A;
+  --human:#B9A2EE; --human-soft:#2B2442; --teal:#6FD0D6; --teal-soft:#15343A;
+  --aws:#F5A65B; --aws-soft:#3A2817;}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.55 var(--sans);font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.wrap>*{min-width:0}
+@media (min-width:720px){.wrap{padding-inline:32px;padding-block:32px 56px}}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.015em}
+h1{font-weight:800;font-size:clamp(30px,4.2vw,50px);line-height:1.05}
+h2{font-weight:700;font-size:clamp(22px,2.6vw,32px);line-height:1.15}
+h3{font-weight:700;font-size:17px;line-height:1.25}
+p{margin:0;max-width:70ch}
+a{color:var(--accent)}
+code{font:500 14px/1.4 var(--mono);background:var(--sunk);border:1px solid var(--rule);border-radius:6px;padding:2px 7px;overflow-wrap:anywhere}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.eyebrow{font:600 12px/1.3 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.logo{width:22px;height:22px;flex:none;fill:currentColor;stroke:none}
+
+/* Slides: every slide shows when scripts are off or when printing; the deck shows one at a time */
+.slide{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:24px 18px;display:grid;gap:20px;align-content:start;min-width:0}
+@media (min-width:720px){.slide{padding:36px 40px;min-height:600px}}
+.slide>*{min-width:0}
+.js .slide{display:none}
+.js .slide.on{display:grid;animation:in .45s ease both}
+@keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.head{display:grid;gap:8px}
+.head p{color:var(--muted);font-size:17px}
+
+/* Navigation */
+.nav{display:none;align-items:center;justify-content:space-between;gap:12px}
+.js .nav{display:flex}
+.nav button{font:600 14px var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:999px;padding:9px 16px;cursor:pointer}
+.nav button:hover{border-color:var(--accent)}
+.nav button:disabled{opacity:.45;cursor:default}
+.dots{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.dots{gap:0}
+.dots button{position:relative;width:24px;height:24px;padding:0;background:none;border:0;border-radius:6px;cursor:pointer}
+.dots button::before{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;transform:translate(-50%,-50%);border-radius:50%;background:var(--rule)}
+.dots button[aria-current="true"]{width:40px}
+.dots button[aria-current="true"]::before{background:var(--accent);width:28px;border-radius:6px}
+h1:focus,h2:focus{outline:none}
+
+/* Slide 2: diagram */
+.figure{margin:0;display:grid;gap:12px}
+.scroll{overflow-x:auto;border-radius:12px}
+svg.d{display:block;width:100%;min-width:860px;height:auto;font-family:var(--sans)}
+.d .zone{fill:var(--sunk);stroke:var(--aws);stroke-width:1.5;stroke-dasharray:6 5}
+.d .zone-t{font:600 12.5px var(--sans);fill:var(--aws);letter-spacing:.08em;text-transform:uppercase}
+.d .box{fill:var(--surface);stroke:var(--rule);stroke-width:1.5}
+.d .box.next{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4}
+.d .tile{fill:var(--c)}
+.d .glyph{fill:var(--surface)}
+.d .glyph-s{fill:none;stroke:var(--surface);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.d .bt{font:700 15px var(--display);fill:var(--ink)}
+.d .bs{font:400 12.5px var(--sans);fill:var(--muted)}
+.d .wire{stroke:var(--rule);stroke-width:3;fill:none}
+.d .flow{stroke:var(--accent);stroke-width:2.5;fill:none;stroke-dasharray:7 7;animation:dash 1.2s linear infinite}
+.d .flow.key{stroke:var(--human)} .d .flow.cache{stroke:var(--teal)} .d .pkt.cache{fill:var(--teal)} .d .flow.data{stroke:var(--go)} .d .flow.alarm{stroke:var(--stop);stroke-dasharray:3 6}
+@keyframes dash{to{stroke-dashoffset:-28}}
+.d .pkt{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.d .pkt.data{fill:var(--go)}
+.d .flow.t1{stroke:var(--accent)}
+.d .pkt.t1,.d .ah.t1{fill:var(--accent)}
+.d .flow.t2{stroke:var(--go)}
+.d .pkt.t2,.d .ah.t2{fill:var(--go)}
+.d .lg{fill:currentColor}
+.d .stage{fill:var(--sunk);stroke:var(--rule)}
+.d .stage-n{font:700 12.5px var(--sans);letter-spacing:.12em;fill:var(--accent)}
+.d .stage-t{font:700 14px var(--display);fill:var(--ink)}
+.d .tech{font-weight:700;fill:var(--ink)}
+.d .num{font:800 20px var(--display);fill:var(--surface);text-anchor:middle}
+.d.map .row{animation:in .5s ease both}.d.map .row:nth-of-type(2){animation-delay:.25s}.d.map .row:nth-of-type(3){animation-delay:.5s}
+.d .ft{font:600 12.5px var(--sans);fill:var(--muted)}
+.d .say{font:600 12.5px var(--sans);fill:var(--ink)}
+.key-l{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--muted)}
+.key-l span{display:inline-flex;align-items:center;gap:8px}
+.key-l i{width:22px;height:0;border-top:3px dashed var(--c);display:inline-block}
+
+.note{font-size:15px;color:var(--muted)}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.duo .card{border:1px solid var(--rule);border-radius:12px;padding:14px 16px;background:var(--surface)}
+.cmds{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;font-size:15px;color:var(--muted)}
+.cmds li{display:contents}
+@media (max-width:760px){.duo{grid-template-columns:1fr}}
+
+.note b{color:var(--ink)}
+.d .badge{stroke-width:1.5}.d .badge.go{fill:var(--go-soft);stroke:var(--go)}.d .badge.wait{fill:var(--wait-soft);stroke:var(--wait)}.d .badge.later{fill:var(--later-soft);stroke:var(--later)}
+.d .bdg{font:700 11.5px var(--sans);text-anchor:middle}.d .bdg.go{fill:var(--go)}.d .bdg.wait{fill:var(--wait)}.d .bdg.later{fill:var(--later)}
+.d .ah{fill:var(--muted)}
+.d .cmd{font:500 13px var(--mono);fill:var(--ink)}.d .res{font:500 13px var(--mono);fill:var(--muted)}
+.d .div{stroke:var(--rule);stroke-width:1;stroke-dasharray:4 4}
+
+footer{color:var(--muted);font-size:14px;border-top:1px solid var(--rule);padding-top:14px}
+@media (prefers-reduced-motion:reduce){.d .flow{animation:none}.d .moving{display:none}.js .slide.on{animation:none}}
+@media print{.js .slide{display:grid}.nav{display:none!important}.slide{break-inside:avoid;min-height:0}.scroll{overflow:visible}svg.d{min-width:0}.d .moving{display:none}}
+.code{margin:10px 0 0;padding:10px 12px;font:500 13px/1.5 var(--mono);background:var(--sunk);border:1px solid var(--rule);border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.note code{font-size:13px}
+.card .note{margin-top:10px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="g-blocks" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><path d="M17.25 14v6.5M14 17.25h6.5"/></symbol>
+  <symbol id="g-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.6L16 9.5"/></symbol>
+  <symbol id="g-code" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/><path d="m13.5 5-3 14"/></symbol>
+  <symbol id="g-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.3c-.6-.8-1.6-1.3-2.7-1.3-1.5 0-2.6.8-2.6 2s1 1.7 2.7 2.1c1.7.4 2.7 1 2.7 2.2s-1.1 2-2.7 2c-1.2 0-2.2-.5-2.9-1.4M12 6.4V8m0 8v1.6"/></symbol>
+  <symbol id="g-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13"/><path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/></symbol>
+  <symbol id="g-edge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.7 3.9 5.7 3.9 9s-1.3 6.3-3.9 9c-2.6-2.7-3.9-5.7-3.9-9S9.4 5.7 12 3z"/></symbol>
+  <symbol id="g-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l2.5 2.5M14 9l2 2"/></symbol>
+  <symbol id="g-road" viewBox="0 0 24 24"><path d="M8 3 4 21"/><path d="m16 3 4 18"/><path d="M12 4v3"/><path d="M12 10.5v3"/><path d="M12 17v3"/></symbol>
+  <symbol id="g-shield" viewBox="0 0 24 24"><path d="M12 2.5 4 5.5v6c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10v-6l-8-3z"/><path d="m8.5 12 2.4 2.4 4.6-4.8"/></symbol>
+  <symbol id="g-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/></symbol>
+  <symbol id="l-apigw" viewBox="0 0 24 24"><path d="M9.456 18.7h1.258v-.865H9.456Zm2.115 0h1.286v-.865h-1.286ZM6.43 1.127.857 3.892v17.19l5.572 1.885Zm.857 5.47v11.238H8.57v.865H7.286v4.868a.434.434 0 0 1-.429.432.425.425 0 0 1-.136-.022L.292 21.804a.432.432 0 0 1-.292-.41V3.623c0-.164.093-.315.24-.388L6.668.045a.424.424 0 0 1 .415.02.433.433 0 0 1 .203.367v5.3H8.57v.865ZM13.714 18.7H15v-.865h-1.286Zm.028-12.103H15v-.864h-1.258Zm-2.143 0h1.258v-.864H11.6Zm-2.143 0h1.258v-.864H9.456Zm13.687-2.705L17.57 1.127v21.84l5.572-1.884ZM24 21.394c0 .186-.117.35-.292.41l-6.429 2.174a.425.425 0 0 1-.386-.06.434.434 0 0 1-.179-.35V18.7h-.829v-.865h.83V6.597h-.83v-.864h.83v-5.3c0-.15.076-.289.202-.368a.424.424 0 0 1 .415-.02l6.428 3.19c.147.073.24.224.24.388ZM13.257 9.346l-.8-.31-2.143 5.618.8.31Zm2.903 2.744a.434.434 0 0 0 0-.612L14.446 9.75l-.606.612 1.411 1.423-1.411 1.423.606.611Zm-6.606 1.728L7.84 12.09a.434.434 0 0 1 0-.612L9.554 9.75l.606.612-1.411 1.423 1.411 1.423Z"/></symbol>
+  <symbol id="l-cw" viewBox="0 0 24 24"><path d="M18.454 14.905c0-1.676-1.372-3.039-3.059-3.039-1.686 0-3.058 1.363-3.058 3.039 0 1.675 1.372 3.038 3.058 3.038 1.687 0 3.059-1.363 3.059-3.038Zm.862 0c0 2.147-1.759 3.894-3.92 3.894-2.162 0-3.92-1.747-3.92-3.894 0-2.148 1.758-3.895 3.92-3.895 2.161 0 3.92 1.747 3.92 3.895Zm3.617 5.87-3.004-2.688c-.242.34-.523.649-.834.926l2.999 2.687c.256.23.654.208.885-.046a.623.623 0 0 0-.046-.88Zm-7.538-1.206c2.59 0 4.696-2.092 4.696-4.664 0-2.573-2.106-4.665-4.696-4.665-2.589 0-4.696 2.092-4.696 4.665 0 2.572 2.107 4.664 4.696 4.664Zm8.224 2.658c-.293.323-.7.487-1.107.487a1.49 1.49 0 0 1-.995-.378L18.399 19.542a5.543 5.543 0 0 1-3.004.883c-3.064 0-5.557-2.476-5.557-5.52 0-3.044 2.493-5.521 5.557-5.521 3.065 0 5.558 2.477 5.558 5.52 0 .874-.21 1.697-.576 2.432l3.133 2.803c.608.546.657 1.482.11 2.088ZM3.977 7.454c0 .222.014.444.04.659a.426.426 0 0 1-.352.473C2.605 8.858.862 9.681.862 12.148c0 1.863 1.034 2.892 1.902 3.427.297.185.647.284 1.017.288l5.195.005v.856l-5.2-.005a2.815 2.815 0 0 1-1.469-.418C1.447 15.77 0 14.524 0 12.148c0-2.864 1.971-3.923 3.129-4.297a6.093 6.093 0 0 1-.013-.397c0-2.34 1.598-4.767 3.716-5.645 2.478-1.031 5.104-.52 7.022 1.367a7.048 7.048 0 0 1 1.459 2.116 2.79 2.79 0 0 1 1.78-.644c1.287 0 2.735.97 2.993 3.092 1.205.276 3.751 1.24 3.751 4.441 0 1.278-.403 2.333-1.199 3.137l-.614-.6c.632-.638.952-1.491.952-2.537 0-2.8-2.36-3.495-3.374-3.664a.43.43 0 0 1-.353-.496c-.141-1.738-1.18-2.517-2.156-2.517-.616 0-1.193.298-1.584.818a.431.431 0 0 1-.75-.111c-.353-.971-.861-1.788-1.511-2.426-1.663-1.636-3.936-2.079-6.084-1.186-1.787.74-3.187 2.873-3.187 4.855Z"/></symbol>
+  <symbol id="l-lambda" viewBox="0 0 24 24"><path d="M4.9855 0c-.2941.0031-.5335.2466-.534.5482L4.446 5.456c0 .1451.06.2835.159.3891a.5322.5322 0 0 0 .3806.1562h3.4282l8.197 17.6805a.5365.5365 0 0 0 .4885.3181h5.811c.2969 0 .5426-.2448.5426-.5482V18.544c0-.3035-.2392-.5482-.5425-.5482h-2.0138L12.7394.3153C12.647.124 12.4564 0 12.2452 0h-7.254Zm.5397 1.0907h6.3678l8.16 17.6804a.5365.5365 0 0 0 .4885.3181h1.8178v3.8173H17.437L9.2402 5.226a.536.536 0 0 0-.4885-.318H5.5223Zm2.0137 8.2366c-.2098.0011-.3937.1193-.4857.3096L.6002 23.2133a.5506.5506 0 0 0 .0313.5282.5334.5334 0 0 0 .4544.25h6.169a.5468.5468 0 0 0 .497-.3096l3.38-7.166a.5405.5405 0 0 0-.0029-.4686L8.036 9.637a.5468.5468 0 0 0-.4942-.3096Zm.0057 1.8036 2.488 5.1522-3.1214 6.6206H1.9465Z"/></symbol>
+  <symbol id="l-s3" viewBox="0 0 24 24"><path d="M20.913 13.147l.12-.895c.947.576 1.258.922 1.354 1.071-.16.031-.562.046-1.474-.176zm-2.174 7.988a.547.547 0 0 0-.005.073c0 .084-.207.405-1.124.768a10.28 10.28 0 0 1-1.438.432c-1.405.325-3.128.504-4.853.504-4.612 0-7.412-1.184-7.412-1.704a.547.547 0 0 0-.005-.073L1.81 5.602c.135.078.28.154.432.227.042.02.086.038.128.057.134.062.272.122.417.18l.179.069c.154.058.314.114.478.168.043.013.084.029.13.043.207.065.423.127.646.187l.176.044c.175.044.353.087.534.127a23.414 23.414 0 0 0 .843.17l.121.023c.252.045.508.085.768.122.071.011.144.02.216.03.2.027.4.053.604.077l.24.027c.245.026.49.05.74.07l.081.009c.275.022.552.04.83.056l.233.012c.21.01.422.018.633.025a33.088 33.088 0 0 0 2.795-.026l.232-.011c.278-.016.555-.034.83-.056l.08-.008c.25-.02.497-.045.742-.072l.238-.026c.205-.024.408-.05.609-.077.07-.01.141-.019.211-.03.261-.037.519-.078.772-.122l.111-.02c.215-.04.427-.082.634-.125l.212-.047c.186-.041.368-.085.546-.13l.166-.042c.225-.06.444-.122.654-.189.04-.012.077-.026.115-.038a10.6 10.6 0 0 0 .493-.173c.058-.021.114-.044.17-.066.15-.06.293-.12.43-.185.038-.017.079-.034.116-.052.153-.073.3-.15.436-.228l-.976 7.245c-2.488-.78-5.805-2.292-7.311-3a1.09 1.09 0 0 0-1.088-1.085c-.6 0-1.088.489-1.088 1.088 0 .6.488 1.089 1.088 1.089.196 0 .378-.056.537-.148 1.72.812 5.144 2.367 7.715 3.15zm-7.42-20.047c5.677 0 9.676 1.759 9.75 2.736l-.014.113c-.01.033-.031.067-.048.101-.015.028-.026.057-.047.087-.024.033-.058.068-.09.102-.028.03-.051.06-.084.09-.038.035-.087.07-.133.105-.04.03-.074.06-.119.091-.053.036-.116.071-.177.107-.05.03-.095.06-.15.09-.068.036-.147.073-.222.11-.059.028-.114.057-.177.085-.084.038-.177.074-.268.111-.068.027-.13.054-.203.082-.097.036-.205.072-.31.107-.075.026-.148.053-.228.079-.111.035-.233.069-.35.103-.085.024-.165.05-.253.073-.124.034-.258.065-.389.098-.093.022-.181.046-.278.068-.139.032-.287.061-.433.091-.098.02-.191.041-.293.06-.155.03-.32.057-.482.084-.1.018-.198.036-.302.052-.166.026-.342.048-.515.072-.11.014-.213.03-.325.044-.181.023-.372.041-.56.06-.11.012-.218.025-.332.036-.188.016-.386.029-.58.043-.122.009-.24.02-.364.028-.207.012-.422.02-.635.028-.12.005-.234.012-.354.016a35.605 35.605 0 0 1-2.069 0c-.12-.004-.234-.011-.352-.016-.214-.008-.43-.016-.637-.028-.122-.008-.238-.02-.36-.027-.195-.015-.394-.028-.584-.044-.11-.01-.215-.024-.324-.035-.19-.02-.384-.038-.568-.06l-.315-.044c-.176-.024-.355-.046-.525-.073-.1-.015-.192-.033-.29-.05-.167-.028-.335-.055-.494-.086-.096-.018-.183-.038-.276-.056-.151-.032-.305-.062-.45-.095-.09-.02-.173-.043-.26-.064-.138-.034-.277-.067-.407-.102-.082-.022-.157-.046-.235-.069a11.75 11.75 0 0 1-.368-.108c-.075-.024-.141-.049-.213-.073-.11-.037-.223-.075-.325-.113-.067-.025-.125-.051-.188-.077-.096-.038-.195-.076-.282-.115-.06-.027-.11-.054-.166-.08-.08-.039-.162-.077-.233-.116-.052-.028-.094-.055-.142-.084-.063-.038-.13-.075-.185-.113-.043-.029-.075-.058-.113-.086-.048-.037-.098-.073-.139-.11-.032-.029-.054-.057-.08-.087-.033-.035-.069-.07-.093-.104-.02-.03-.031-.058-.046-.086-.018-.035-.039-.068-.049-.102l-.015-.113c.076-.977 4.074-2.736 9.748-2.736zm12.182 12.124c-.118-.628-.84-1.291-2.31-2.128l.963-7.16a.531.531 0 0 0 .005-.073C22.16 1.581 16.447 0 11.32 0 6.194 0 .482 1.581.482 3.851a.58.58 0 0 0 .005.072L2.819 21.25c.071 2.002 5.236 2.75 8.5 2.75 1.805 0 3.615-.188 5.098-.531.598-.138 1.133-.3 1.592-.48 1.18-.467 1.789-1.053 1.813-1.739l.945-7.018c.557.131 1.016.197 1.389.197.54 0 .902-.137 1.134-.413a.956.956 0 0 0 .21-.804Z"/></symbol>
+</svg>
+<main class="wrap" id="deck" aria-roledescription="slide deck" aria-label="Serverless modules for AWS">
+
+<section class="slide on" aria-roledescription="slide" aria-label="1 of 6: two tracks">
+  <div class="head"><span class="eyebrow">1 · Two tracks of public Terraform modules</span><h1>Serverless apps on AWS, from two tracks of reusable modules</h1><p>Start fast, stay audited, see cost first, approve every release.</p></div>
+  <figure class="figure">
+    <div class="scroll">
+    <svg class="d" viewBox="0 0 1100 390" role="img" aria-label="Two tracks of reusable modules. Track 1, AWS Account: the account-baseline module, which composes bootstrap, security-baseline and github-oidc, applied once per AWS account by its administrator. Track 2, Serverless-Apps: the serverless-web-app module, one thin caller per app, deployed by the app&#x27;s own pipeline. Who gains: teams start fast, security gets an audit trail and no stored keys, finance sees cost first, and every release is approved."><path class="wire" d="M480 70 H552"/><path class="flow t1" d="M480 70 H552"/><polygon class="ah t1" points="543,65 552,70 543,75"/><g class="moving"><circle class="pkt t1" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M480 70 H552"/></circle></g><text class="ft" style="text-anchor:middle" x="516" y="60">composes</text><path class="wire" d="M480 200 H564"/><path class="flow t2" d="M480 200 H564"/><polygon class="ah t2" points="555,195 564,200 555,205"/><g class="moving"><circle class="pkt t2" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M480 200 H564"/></circle></g><text class="ft" style="text-anchor:middle" x="522" y="190">used by</text><path class="wire" d="M790 200 H830"/><path class="flow t2" d="M790 200 H830"/><polygon class="ah t2" points="821,195 830,200 821,205"/><g class="moving"><circle class="pkt t2" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M790 200 H830"/></circle></g><rect class="box" x="20" y="30" width="190" height="80" rx="12"/><rect class="tile" style="--c:var(--accent)" x="34" y="48" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-code" x="44" y="58" width="24" height="24"/><text class="bt" x="88" y="67">Track 1</text><text class="bs" x="88" y="86">AWS Account</text><rect class="box" x="20" y="160" width="190" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="34" y="178" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-road" x="44" y="188" width="24" height="24"/><text class="bt" x="88" y="197">Track 2</text><text class="bs" x="88" y="216">Serverless-Apps</text><rect class="box" x="20" y="290" width="190" height="80" rx="12"/><rect class="tile" style="--c:var(--teal)" x="34" y="308" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-user" x="44" y="318" width="24" height="24"/><text class="bt" x="88" y="327">Who gains</text><text class="bs" x="88" y="346">each reader</text><rect class="box" x="240" y="30" width="240" height="80" rx="12"/><rect class="tile" style="--c:var(--accent)" x="254" y="48" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-blocks" x="264" y="58" width="24" height="24"/><text class="bt" x="308" y="67">account-baseline</text><text class="bs" x="308" y="86">applied once per account</text><text class="bs" x="308" y="101">by its administrator</text><rect class="stage" x="552" y="18" width="532" height="104" rx="14"/><rect class="box" x="564" y="30" width="160" height="80" rx="12"/><rect style="fill:var(--accent)" x="574" y="46" width="5" height="48" rx="2"/><text class="bt" style="font-size:14px" x="590" y="67">bootstrap</text><text class="bs" x="590" y="86">state bucket, budget</text><rect class="box" x="736" y="30" width="160" height="80" rx="12"/><rect style="fill:var(--accent)" x="746" y="46" width="5" height="48" rx="2"/><text class="bt" style="font-size:14px" x="762" y="67">security-baseline</text><text class="bs" x="762" y="86">audit trail, guardrails</text><rect class="box" x="908" y="30" width="160" height="80" rx="12"/><rect style="fill:var(--accent)" x="918" y="46" width="5" height="48" rx="2"/><text class="bt" style="font-size:14px" x="934" y="67">github-oidc</text><text class="bs" x="934" y="86">sign-in, no keys</text><rect class="box" x="240" y="160" width="240" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="254" y="178" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-blocks" x="264" y="188" width="24" height="24"/><text class="bt" x="308" y="197">serverless-web-app</text><text class="bs" x="308" y="216">one caller per app</text><rect class="box" x="564" y="160" width="226" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="578" y="178" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-code" x="588" y="188" width="24" height="24"/><text class="bt" x="632" y="197">Thin caller</text><text class="bs" x="632" y="216">pinned to one release</text><rect class="box" x="830" y="160" width="240" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="844" y="178" width="44" height="44" rx="10"/><use class="glyph" href="#l-lambda" x="854" y="188" width="24" height="24"/><text class="bt" x="898" y="197">App pipeline</text><text class="bs" x="898" y="216">deploys its own app</text><rect class="box" x="240" y="290" width="197" height="80" rx="12"/><rect class="tile" style="--c:var(--accent)" x="254" y="308" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-code" x="264" y="318" width="24" height="24"/><text class="bt" x="308" y="327">Teams</text><text class="bs" x="308" y="346">start fast</text><rect class="box" x="451" y="290" width="197" height="80" rx="12"/><rect class="tile" style="--c:var(--stop)" x="465" y="308" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-shield" x="475" y="318" width="24" height="24"/><text class="bt" x="519" y="327">Security</text><text class="bs" x="519" y="346">audit trail</text><text class="bs" x="519" y="361">no stored keys</text><rect class="box" x="662" y="290" width="197" height="80" rx="12"/><rect class="tile" style="--c:var(--aws)" x="676" y="308" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-coin" x="686" y="318" width="24" height="24"/><text class="bt" x="730" y="327">Finance</text><text class="bs" x="730" y="346">cost shown first</text><rect class="box" x="873" y="290" width="197" height="80" rx="12"/><rect class="tile" style="--c:var(--human)" x="887" y="308" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-key" x="897" y="318" width="24" height="24"/><text class="bt" x="941" y="327">Every release</text><text class="bs" x="941" y="346">is approved</text></svg>
+    </div>
+    <div class="key-l"><span><i style="--c:var(--accent)"></i>Track 1 · once per account</span><span><i style="--c:var(--go)"></i>Track 2 · once per app</span></div>
+  </figure>
+</section>
+<section class="slide" aria-roledescription="slide" aria-label="2 of 6: Track 1 in practice">
+  <div class="head"><span class="eyebrow">2 · Track 1 · AWS Account</span><h2>A new AWS account, safe and cost-aware from day one</h2></div>
+  <figure class="figure">
+    <div class="scroll">
+    <svg class="d" viewBox="0 0 1100 375" role="img" aria-label="What Track 1 gives an AWS account: a versioned encrypted state bucket, a budget alert by email, an audit trail in its own encrypted bucket, an account guard that refuses other accounts, a password policy, an account-wide S3 public access block, EBS encryption and IMDSv2 defaults, and GitHub sign-in roles that trust one repository with no stored keys. Four inputs set the cost: security_kms_key_enabled, access_log_bucket_enabled, log_retention_days and create_state_kms_key."><text class="stage-n" x="20" y="22">THE ACCOUNT GETS</text><rect class="box" x="20" y="34" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="34" y="52" width="44" height="44" rx="10"/><use class="glyph" href="#l-s3" x="44" y="62" width="24" height="24"/><text class="bt" x="88" y="71">State bucket</text><text class="bs" x="88" y="90">versioned, encrypted</text><rect class="box" x="291" y="34" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--aws)" x="305" y="52" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-coin" x="315" y="62" width="24" height="24"/><text class="bt" x="359" y="71">Budget alert</text><text class="bs" x="359" y="90">email before the limit</text><rect class="box" x="562" y="34" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="576" y="52" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-check" x="586" y="62" width="24" height="24"/><text class="bt" x="630" y="71">Audit trail</text><text class="bs" x="630" y="90">own encrypted bucket</text><rect class="box" x="833" y="34" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--teal)" x="847" y="52" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-shield" x="857" y="62" width="24" height="24"/><text class="bt" x="901" y="71">Account guard</text><text class="bs" x="901" y="90">other accounts refused</text><rect class="box" x="20" y="128" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--stop)" x="34" y="146" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-key" x="44" y="156" width="24" height="24"/><text class="bt" x="88" y="165">Password policy</text><text class="bs" x="88" y="184">set for the account</text><rect class="box" x="291" y="128" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--accent)" x="305" y="146" width="44" height="44" rx="10"/><use class="glyph" href="#l-s3" x="315" y="156" width="24" height="24"/><text class="bt" x="359" y="165">Public access block</text><text class="bs" x="359" y="184">S3 blocked account-wide</text><rect class="box" x="562" y="128" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="576" y="146" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-db" x="586" y="156" width="24" height="24"/><text class="bt" x="630" y="165">Disk defaults</text><text class="bs" x="630" y="184">EBS encrypted, IMDSv2</text><rect class="box" x="833" y="128" width="247" height="80" rx="12"/><rect class="tile" style="--c:var(--human)" x="847" y="146" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-key" x="857" y="156" width="24" height="24"/><text class="bt" x="901" y="165">GitHub sign-in</text><text class="bs" x="901" y="184">trusts one repository</text><text class="bs" x="901" y="199">no stored keys</text><text class="stage-n" style="fill:var(--aws)" x="20" y="244">COST CHOICES · FOUR INPUTS</text><rect class="box" x="20" y="256" width="247" height="104" rx="12"/><rect style="fill:var(--aws)" x="30" y="272" width="5" height="72" rx="2"/><text class="cmd" x="46" y="286">security_kms_key_enabled</text><text class="bs" x="46" y="312">false: no key to pay for;</text><text class="bs" x="46" y="327">the trail uses S3-managed keys</text><rect class="box" x="291" y="256" width="247" height="104" rx="12"/><rect style="fill:var(--aws)" x="301" y="272" width="5" height="72" rx="2"/><text class="cmd" x="317" y="286">access_log_bucket_enabled</text><text class="bs" x="317" y="312">false: no second log bucket,</text><text class="bs" x="317" y="327">less storage to pay for</text><rect class="box" x="562" y="256" width="247" height="104" rx="12"/><rect style="fill:var(--aws)" x="572" y="272" width="5" height="72" rx="2"/><text class="cmd" x="588" y="286">log_retention_days</text><text class="bs" x="588" y="312">how long audit logs are kept;</text><text class="bs" x="588" y="327">longer keeps more, costs more</text><rect class="box" x="833" y="256" width="247" height="104" rx="12"/><rect style="fill:var(--aws)" x="843" y="272" width="5" height="72" rx="2"/><text class="cmd" x="859" y="286">create_state_kms_key</text><text class="bs" x="859" y="312">false (default): state is still</text><text class="bs" x="859" y="327">encrypted, with no key to pay for</text></svg>
+    </div>
+    <p class="note">Applied once from an administrator's terminal. Its outputs feed every app in <b>Track 2</b>.</p>
+  </figure>
+</section>
+<section class="slide" aria-roledescription="slide" aria-label="3 of 6: Track 2 in practice">
+  <div class="head"><span class="eyebrow">3 · Track 2 · Serverless-Apps</span><h2>One request path, two ways to package your app</h2></div>
+  <figure class="figure">
+    <div class="scroll">
+    <svg class="d" viewBox="0 0 1100 400" role="img" aria-label="How a request is served by the serverless-web-app module. A browser reaches one web address at CloudFront, which caches pages from a private site bucket. Calls under /api go through an HTTP API to a Lambda function, packaged as a zip or a container image. The function reads its signing key from the secret store, keeps files in a versioned data bucket and sends alarms to your topic."><rect class="zone" x="220" y="14" width="866" height="366" rx="16"/><text class="zone-t" x="240" y="42">Your AWS account</text><path class="wire" d="M190 210 H240"/><path class="flow" d="M190 210 H240"/><path class="wire" d="M410 200 C435 200 435 100 460 100"/><path class="flow cache" d="M410 200 C435 200 435 100 460 100"/><path class="wire" d="M410 220 C435 220 435 320 460 320"/><path class="flow" d="M410 220 C435 220 435 320 460 320"/><path class="wire" d="M630 320 H680"/><path class="flow" d="M630 320 H680"/><path class="wire" d="M850 320 H900"/><path class="flow data" d="M850 320 H900"/><path class="wire" d="M765 280 V140"/><path class="flow key" d="M765 280 V140"/><path class="flow alarm" d="M820 280 C850 210 950 180 985 140"/><text class="ft" x="252" y="156" style="fill:var(--teal)">pages · cached at the edge</text><text class="ft" x="252" y="276" style="fill:var(--accent)">/api · never cached</text><text class="ft" x="775" y="215">key at start</text><g class="moving"><circle class="pkt" r="6"><animateMotion dur="4s" repeatCount="indefinite" path="M190 210 H240 M410 220 C435 220 435 320 460 320 M630 320 H680"/></circle></g><g class="moving"><circle class="pkt cache" r="6"><animateMotion dur="2.5s" repeatCount="indefinite" path="M190 210 H240 M410 200 C435 200 435 100 460 100"/></circle></g><g class="moving"><circle class="pkt data" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M850 320 H900" keyPoints="0;1;0" keyTimes="0;.5;1" calcMode="linear"/></circle></g><rect class="box" x="20" y="170" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--later)" x="34" y="188" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-user" x="44" y="198" width="24" height="24"/><text class="bt" x="88" y="207">Browser</text><text class="bs" x="88" y="226">your users</text><rect class="box" x="240" y="170" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--aws)" x="254" y="188" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-edge" x="264" y="198" width="24" height="24"/><text class="bt" x="308" y="207">CloudFront</text><text class="bs" x="308" y="226">one web address</text><rect class="box" x="460" y="60" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="474" y="78" width="44" height="44" rx="10"/><use class="glyph" href="#l-s3" x="484" y="88" width="24" height="24"/><text class="bt" x="528" y="97">Site bucket</text><text class="bs" x="528" y="116">site_source_dir</text><rect class="box" x="460" y="280" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--human)" x="474" y="298" width="44" height="44" rx="10"/><use class="glyph" href="#l-apigw" x="484" y="308" width="24" height="24"/><text class="bt" x="528" y="317">HTTP API</text><text class="bs" x="528" y="336">/api/* calls</text><rect class="box" x="680" y="280" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--aws)" x="694" y="298" width="44" height="44" rx="10"/><use class="glyph" href="#l-lambda" x="704" y="308" width="24" height="24"/><text class="bt" x="748" y="317">Lambda</text><text class="bs" x="748" y="336">zip or image</text><rect class="box" x="900" y="280" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="914" y="298" width="44" height="44" rx="10"/><use class="glyph" href="#l-s3" x="924" y="308" width="24" height="24"/><text class="bt" x="968" y="317">Data bucket</text><text class="bs" x="968" y="336">versioned files</text><rect class="box" x="680" y="60" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--stop)" x="694" y="78" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-key" x="704" y="88" width="24" height="24"/><text class="bt" x="748" y="97">Signing key</text><text class="bs" x="748" y="116">secret_store</text><rect class="box" x="900" y="60" width="170" height="80" rx="12"/><rect class="tile" style="--c:var(--teal)" x="914" y="78" width="44" height="44" rx="10"/><use class="glyph" href="#l-cw" x="924" y="88" width="24" height="24"/><text class="bt" x="968" y="97">Alarms</text><text class="bs" x="968" y="116">to your topic</text></svg>
+    </div>
+    <div class="duo">
+      <div class="card"><b>Two ways to package an app</b>
+        <ul class="cmds"><li><code>source_dir</code><span>a zip built from a folder</span></li><li><code>image_uri</code><span>a container image pinned by digest, run with the AWS Lambda Web Adapter</span></li></ul>
+        <p class="note">Unset <code>image_uri</code> keeps the zip path.</p></div>
+      <div class="card"><b>Inputs a team sets</b>
+        <ul class="cmds"><li><code>service</code><span>names every resource, with environment</span></li><li><code>secret_store</code><span>secrets-manager (default) or parameter-store</span></li><li><code>reserved_concurrency</code><span>caps one function</span></li><li><code>files_kms_key</code><span>false: no key charge</span></li><li><code>files_bucket_label</code><span>the word in the bucket name</span></li><li><code>site_source_dir</code><span>the front-end folder</span></li></ul>
+        <p class="note">Every default keeps earlier behaviour.</p></div>
+    </div>
+  </figure>
+</section>
+<section class="slide" aria-roledescription="slide" aria-label="4 of 6: a new app">
+  <div class="head"><span class="eyebrow">4 · Track 2 · one caller per app</span><h2>A new app in five steps</h2></div>
+  <figure class="figure">
+    <div class="scroll">
+    <svg class="d" viewBox="0 0 1100 130" role="img" aria-label="A new app in five steps. One, copy a thin caller. Two, set its environment settings, dev and production. Three, set the repository variables from Track 1&#x27;s outputs. Four, push to develop and dev deploys. Five, approve and production deploys."><rect class="box" x="20" y="30" width="186" height="80" rx="12"/><circle cx="48" cy="70" r="16" style="fill:var(--go)"/><text class="num" style="font-size:18px" x="48" y="76">1</text><text class="bt" x="74" y="67">Copy a caller</text><text class="bs" x="74" y="86">one thin file</text><path class="wire" d="M206 70 H238"/><path class="flow t2" d="M206 70 H238"/><polygon class="ah t2" points="229,65 238,70 229,75"/><g class="moving"><circle class="pkt t2" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M206 70 H238"/></circle></g><rect class="box" x="238" y="30" width="186" height="80" rx="12"/><circle cx="266" cy="70" r="16" style="fill:var(--go)"/><text class="num" style="font-size:18px" x="266" y="76">2</text><text class="bt" x="292" y="67">Environments</text><text class="bs" x="292" y="86">dev and production</text><path class="wire" d="M424 70 H456"/><path class="flow t2" d="M424 70 H456"/><polygon class="ah t2" points="447,65 456,70 447,75"/><g class="moving"><circle class="pkt t2" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M424 70 H456"/></circle></g><rect class="box" x="457" y="30" width="186" height="80" rx="12"/><circle cx="485" cy="70" r="16" style="fill:var(--go)"/><text class="num" style="font-size:18px" x="485" y="76">3</text><text class="bt" x="511" y="67">Set variables</text><text class="bs" x="511" y="86">from Track 1</text><path class="wire" d="M643 70 H676"/><path class="flow t2" d="M643 70 H676"/><polygon class="ah t2" points="667,65 676,70 667,75"/><g class="moving"><circle class="pkt t2" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M643 70 H676"/></circle></g><rect class="box" x="676" y="30" width="186" height="80" rx="12"/><circle cx="704" cy="70" r="16" style="fill:var(--go)"/><text class="num" style="font-size:18px" x="704" y="76">4</text><text class="bt" x="730" y="67">Push</text><text class="bs" x="730" y="86">to develop:</text><text class="bs" x="730" y="101">dev deploys</text><path class="wire" d="M862 70 H894"/><path class="flow t2" d="M862 70 H894"/><polygon class="ah t2" points="885,65 894,70 885,75"/><g class="moving"><circle class="pkt t2" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M862 70 H894"/></circle></g><rect class="box" x="894" y="30" width="186" height="80" rx="12" style="stroke:var(--human);stroke-width:3;fill:var(--human-soft)"/><circle cx="922" cy="70" r="16" style="fill:var(--human)"/><text class="num" style="font-size:18px" x="922" y="76">5</text><text class="bt" x="948" y="67">Approve</text><text class="bs" x="948" y="86">production deploys</text></svg>
+    </div>
+    <div class="duo" style="grid-template-columns:1.25fr 1fr">
+      <div class="card"><b>A thin caller</b>
+        <pre class="code">module "app" {
+  source = "git::https://github.com/nnthanh101/terraform-aws-serverless.git//modules/serverless-web-app?ref=928bc4555fdc688822a98938fb37b4ef8db9df1a" # v0.4.0
+
+  service            = "shop"
+  image_uri          = var.image_uri   # pinned by digest
+  secret_store       = "parameter-store"
+  files_kms_key      = false
+  files_bucket_label = "files"
+  # plus account_id, region, environment, site_source_dir,
+  # permissions_boundary_arn and alarm_topic_arn
+}</pre></div>
+      <div class="card"><b>Track 1 outputs an app takes</b>
+        <ul class="cmds"><li><code>apply_role_arns</code><span>the sign-in role per environment</span></li><li><code>state_bucket_name</code><span>where state is kept</span></li><li><code>workload_boundary_policy_arns</code><span>the permissions boundary</span></li><li><code>alerts_topic_arn</code><span>the alarm topic</span></li></ul>
+        <p class="note">Worked example: <a href="https://github.com/ngocnxx/digit-yr12-project/blob/develop/infra/app/main.tf">a real app's infra/app/main.tf</a>.</p></div>
+    </div>
+  </figure>
+</section>
+<section class="slide" style="min-height:0" aria-roledescription="slide" aria-label="5 of 6: versions and upgrades">
+  <div class="head"><span class="eyebrow">5 · Versions and upgrades</span><h2>Upgrade by changing one line, with a plan to read</h2></div>
+  <figure class="figure">
+    <div class="scroll">
+    <svg class="d" viewBox="0 0 1100 240" role="img" aria-label="Versions and upgrades. One, each release gets a tag such as v0.4.0. Two, CHANGELOG.md says what changed. Three, pin the commit and keep the tag in a comment. Four, to upgrade, change the ref. Five, read the plan: 0 deletes before apply. Every module has plan-only tests with a mocked provider."><rect class="box" x="20" y="30" width="186" height="80" rx="12"/><circle cx="48" cy="70" r="16" style="fill:var(--accent)"/><text class="num" style="font-size:18px" x="48" y="76">1</text><text class="bt" x="74" y="67">Tag</text><text class="bs" x="74" y="86">v0.4.0</text><text class="bs" x="74" y="101">one per release</text><path class="wire" d="M206 70 H238"/><path class="flow t1" d="M206 70 H238"/><polygon class="ah t1" points="229,65 238,70 229,75"/><g class="moving"><circle class="pkt t1" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M206 70 H238"/></circle></g><rect class="box" x="238" y="30" width="186" height="80" rx="12"/><circle cx="266" cy="70" r="16" style="fill:var(--accent)"/><text class="num" style="font-size:18px" x="266" y="76">2</text><text class="bt" x="292" y="67">CHANGELOG.md</text><text class="bs" x="292" y="86">read what changed</text><path class="wire" d="M424 70 H456"/><path class="flow t1" d="M424 70 H456"/><polygon class="ah t1" points="447,65 456,70 447,75"/><g class="moving"><circle class="pkt t1" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M424 70 H456"/></circle></g><rect class="box" x="457" y="30" width="186" height="80" rx="12"/><circle cx="485" cy="70" r="16" style="fill:var(--accent)"/><text class="num" style="font-size:18px" x="485" y="76">3</text><text class="bt" x="511" y="67">Pin</text><text class="bs" x="511" y="86">the commit,</text><text class="bs" x="511" y="101">tag in a comment</text><path class="wire" d="M643 70 H676"/><path class="flow t1" d="M643 70 H676"/><polygon class="ah t1" points="667,65 676,70 667,75"/><g class="moving"><circle class="pkt t1" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M643 70 H676"/></circle></g><rect class="box" x="676" y="30" width="186" height="80" rx="12"/><circle cx="704" cy="70" r="16" style="fill:var(--accent)"/><text class="num" style="font-size:18px" x="704" y="76">4</text><text class="bt" x="730" y="67">Upgrade</text><text class="bs" x="730" y="86">change the ref</text><path class="wire" d="M862 70 H894"/><path class="flow t1" d="M862 70 H894"/><polygon class="ah t1" points="885,65 894,70 885,75"/><g class="moving"><circle class="pkt t1" r="6"><animateMotion dur="2s" repeatCount="indefinite" path="M862 70 H894"/></circle></g><rect class="box" x="894" y="30" width="186" height="80" rx="12" style="stroke:var(--human);stroke-width:3;fill:var(--human-soft)"/><circle cx="922" cy="70" r="16" style="fill:var(--human)"/><text class="num" style="font-size:18px" x="922" y="76">5</text><text class="bt" x="948" y="67">Plan</text><text class="bs" x="948" y="86">0 deletes</text><text class="bs" x="948" y="101">before apply</text><rect class="box" x="20" y="140" width="1060" height="80" rx="12"/><rect class="tile" style="--c:var(--go)" x="34" y="158" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-check" x="44" y="168" width="24" height="24"/><text class="bt" x="88" y="177">Tested</text><text class="bs" x="88" y="196">every module has plan-only tests with a mocked provider: no AWS account needed</text></svg>
+    </div>
+    <div class="duo">
+      <div class="card"><b>Pin by commit, name it in a comment</b>
+        <pre class="code">source = ".../serverless-web-app?ref=&lt;40-hex&gt;" # vX.Y.Z</pre></div>
+      <div class="card"><b>Upgrade</b>
+        <ul class="cmds"><li><code>ref</code><span>change the commit and the comment</span></li><li><code>terraform plan</code><span>read it before anything is applied</span></li></ul></div>
+    </div>
+  </figure>
+</section>
+<section class="slide" style="min-height:0" aria-roledescription="slide" aria-label="6 of 6: in practice">
+  <div class="head"><span class="eyebrow">6 · In practice</span><h2>The same modules, four everyday cases</h2></div>
+  <figure class="figure">
+    <div class="scroll">
+    <svg class="d" viewBox="0 0 1100 300" role="img" aria-label="Real-world scenarios. Cost first: the web firewall is off, the CloudFront price class is the cheapest, and each key or extra bucket is a choice. A bad release: point the ref back or re-run the earlier release; data is not rolled back. An audit question: answered from the audit trail. New app or new account: the same modules with new values."><rect class="box" x="20" y="20" width="510" height="130" rx="12"/><rect class="tile" style="--c:var(--aws)" x="34" y="38" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-coin" x="44" y="48" width="24" height="24"/><text class="bt" x="88" y="66">Cost first</text><text class="bs" style="font-size:15px" x="88" y="96">The web firewall is off.</text><text class="bs" style="font-size:15px" x="88" y="114">CloudFront uses the cheapest price class.</text><text class="bs" style="font-size:15px" x="88" y="132">Each key or extra bucket is a choice.</text><rect class="box" x="570" y="20" width="510" height="130" rx="12"/><rect class="tile" style="--c:var(--stop)" x="584" y="38" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-road" x="594" y="48" width="24" height="24"/><text class="bt" x="638" y="66">A bad release</text><text class="bs" style="font-size:15px" x="638" y="96">Point the ref back, or re-run the earlier release.</text><text class="bs" style="font-size:15px" x="638" y="114">Data is not rolled back.</text><rect class="box" x="20" y="170" width="510" height="130" rx="12"/><rect class="tile" style="--c:var(--go)" x="34" y="188" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-shield" x="44" y="198" width="24" height="24"/><text class="bt" x="88" y="216">An audit question</text><text class="bs" style="font-size:15px" x="88" y="246">Every change and sign-in is recorded in the</text><text class="bs" style="font-size:15px" x="88" y="264">audit trail, so the answer is already there.</text><rect class="box" x="570" y="170" width="510" height="130" rx="12"/><rect class="tile" style="--c:var(--human)" x="584" y="188" width="44" height="44" rx="10"/><use class="glyph-s" href="#g-blocks" x="594" y="198" width="24" height="24"/><text class="bt" x="638" y="216">New app or new account</text><text class="bs" style="font-size:15px" x="638" y="246">The same modules with new values:</text><text class="bs" style="font-size:15px" x="638" y="264">a new service name, or a new account.</text></svg>
+    </div>
+  </figure>
+</section>
+
+<nav class="nav" aria-label="Slides">
+  <button type="button" id="prev">Previous</button>
+  <div class="dots" id="dots"></div>
+  <button type="button" id="next">Next</button>
+</nav>
+
+<footer>Modules: <a href="https://github.com/nnthanh101/terraform-aws-serverless">github.com/nnthanh101/terraform-aws-serverless</a> · <a href="https://github.com/nnthanh101/terraform-aws-serverless/blob/main/CHANGELOG.md">changelog</a> · <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a> · arrow keys change slides</footer>
+</main>
+<script>
+(function(){
+  var d=document, slides=[].slice.call(d.querySelectorAll('.slide')); if(!slides.length) return;
+  d.documentElement.classList.add('js');
+  var dots=d.getElementById('dots'), prev=d.getElementById('prev'), next=d.getElementById('next'), at=0;
+  slides.forEach(function(s,i){var b=d.createElement('button');b.type='button';b.setAttribute('aria-label','Slide '+(i+1));b.onclick=function(){go(i,true)};dots.appendChild(b)});
+  function go(i,focus){at=Math.max(0,Math.min(slides.length-1,i));
+    slides.forEach(function(s,j){s.classList.toggle('on',j===at)});
+    [].forEach.call(dots.children,function(b,j){b.setAttribute('aria-current',j===at?'true':'false')});
+    prev.disabled=at===0; next.disabled=at===slides.length-1;
+    try{history.replaceState(null,'','#'+(at+1))}catch(e){}
+    if(focus){var t=slides[at].querySelector('h1,h2');if(t){t.setAttribute('tabindex','-1');t.focus({preventScroll:true})}}}
+  prev.onclick=function(){go(at-1,true)}; next.onclick=function(){go(at+1,true)};
+  d.addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key==='PageDown')go(at+1,true);if(e.key==='ArrowLeft'||e.key==='PageUp')go(at-1,true);if(e.key==='Home')go(0,true);if(e.key==='End')go(slides.length-1,true)});
+  window.addEventListener('hashchange',function(){var n=(parseInt(location.hash.slice(1),10)||1)-1;if(n!==at)go(n,true)});
+  var x0=null; d.addEventListener('touchstart',function(e){x0=e.touches[0].clientX},{passive:true});
+  d.addEventListener('touchend',function(e){if(x0===null)return;var dx=e.changedTouches[0].clientX-x0;if(Math.abs(dx)>60)go(at+(dx<0?1:-1),true);x0=null});
+  go((parseInt(location.hash.slice(1),10)||1)-1);
+})();
+</script>
+</body>
+</html>
